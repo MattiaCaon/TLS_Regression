@@ -11,10 +11,10 @@ CAPACITY_AH = 15.0       # Capacità nominale
 V_MAX = 4.2              # Tensione massima (Full)
 V_MIN = 2.8              # Tensione di cutoff (Empty)
 I_PULSE = 15.0           # Corrente di scarica (A)
-DT = 0.1                 # Passo di campionamento (s) - Alta frequenza per vedere bene il rumore
+DT = 0.5                 # Passo di campionamento (s) - Alta frequenza per vedere bene il rumore
 
 # Parametri Temporali
-TIME_PULSE = 20          # Durata scarica (s)
+TIME_PULSE = 5          # Durata scarica (s)
 TIME_REST = 20          # Durata riposo (s)
 
 # --- CONFIGURAZIONE RUMORE ---
@@ -38,8 +38,6 @@ ocv_meas = np.array([2.80, 3.15, 3.30, 3.50, 3.60, 3.68, 3.76, 3.85, 3.94, 4.03,
 
 # Funzione R0 variabile (interpolazione lineare)
 # R0 sale quando la batteria è scarica (SoC < 0.2) o piena (SoC > 0.9)
-#r0_soc_x = np.array([0.0,   0.1,   0.2,   0.8,   1.0])
-#r0_val_y = np.array([0.025, 0.012, 0.008, 0.008, 0.010]) # Ohm
 r0_soc_x = np.array([0.0,     0.1,   0.2,   0.4,      0.6,     0.8,    1.0])
 r0_val_y = np.array([0.050, 0.038, 0.028, 0.025,    0.022,   0.022,  0.020]) # Ohm
 
@@ -70,6 +68,8 @@ def run_simulation_with_noise():
     current_soc = 1.0
     t = 0.0
     data = []
+    last_meas_V = 4.2
+    last_meas_I = 0
 
     print(f"Avvio simulazione con Varianza Rumore: {NOISE_VARIANCE} (StdDev: {NOISE_STD_DEV:.4f} V)")
 
@@ -78,6 +78,7 @@ def run_simulation_with_noise():
         # --- FASE SCARICA (PULSE) ---
         current = I_PULSE
         steps = int(TIME_PULSE / DT)
+        first_entrance = True
 
         for _ in range(steps):
             ocv, r0 = get_true_params(current_soc)
@@ -91,23 +92,32 @@ def run_simulation_with_noise():
 
             # Tensione "Misurata" (con rumore)
             v_noisy = v_clean + noise_sample
+            i_noisy = current + noise_sample_i
 
-            i_noise = current + noise_sample_i
+            if first_entrance == True:
+                r0_meas = abs((last_meas_V-v_noisy)/(i_noisy - last_meas_I))
+                first_entrance = False
 
-            data.append([t, current, v_noisy, v_clean, current_soc, ocv, r0, i_noise])
+            data.append([t, current, v_noisy, v_clean, current_soc, ocv, r0, i_noisy, r0_meas])
 
             # Integrazione SoC (Coulomb Counting)
             # dSoC = - I * dt / Q_tot (As)
             current_soc -= (current * DT) / (CAPACITY_AH * 3600)
             t += DT
 
-            if ocv <= V_MIN or current_soc <= 0: break
+            last_meas_V = v_noisy
+            last_meas_I = i_noisy
 
-        if ocv <= V_MIN or current_soc <= 0: break
+            if ocv <= V_MIN or current_soc <= 0:
+                break
+
+        if ocv <= V_MIN or current_soc <= 0:
+            break
 
         # --- FASE RIPOSO (REST) ---
         current = 0.0
         steps = int(TIME_REST / DT)
+        first_entrance = True
 
         for _ in range(steps):
             ocv, r0 = get_true_params(current_soc)
@@ -117,14 +127,20 @@ def run_simulation_with_noise():
             noise_sample_i = np.random.normal(NOISE_MEAN, NOISE_STD_DEV_I)
 
             v_noisy = v_clean + noise_sample
+            i_noisy = current + noise_sample
 
-            i_noise = current + noise_sample_i
+            if first_entrance == True:
+                r0_meas = abs((last_meas_V-v_noisy)/(i_noisy - last_meas_I))
+                first_entrance = False
 
-            data.append([t, current, v_noisy, v_clean, current_soc, ocv, r0, i_noise])
+            data.append([t, current, v_noisy, v_clean, current_soc, ocv, r0, i_noisy, r0_meas])
+
+            last_meas_V = v_noisy
+            last_meas_I = i_noisy
 
             t += DT # SoC non cambia a riposo
 
-    columns = ['Time_s', 'Current_A', 'Voltage_Measured_V', 'Voltage_Clean_V', 'SoC', 'OCV_True_V', 'R0_True_Ohm', 'Current_Meas']
+    columns = ['Time_s', 'Current_A', 'Voltage_Measured_V', 'Voltage_Clean_V', 'SoC', 'OCV_True_V', 'R0_True_Ohm', 'Current_Meas', 'R0_Meas']
     return pd.DataFrame(data, columns=columns)
 
 # ==========================================
@@ -178,6 +194,7 @@ ax2.grid(True, alpha=0.3)
 # Grafico 3: Resistance
 ax3.set_title(f'Resistenza (Var={NOISE_VARIANCE})')
 ax3.plot(df['Time_s'], df['R0_True_Ohm']*1000, 'g', label='True R0 (mOhm)')
+ax3.plot(df['Time_s'], df['R0_Meas']*1000, 'g--', label='Meas R0 (mOhm)')
 ax3.set_ylabel('Resistance [Ohm]')
 ax3.legend(loc='upper right')
 ax3.grid(True)
