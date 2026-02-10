@@ -1,7 +1,9 @@
 % --- 1. SETUP DATA ---
 % Ensure x and y are column vectors
-x = x(:);
-y = y(:);
+load("../res/dataset.mat")
+x = use_data_soc_meas;
+y = use_data_r0_meas; 
+
 N = length(x);
 
 % --- 2. CONFIGURATION ---
