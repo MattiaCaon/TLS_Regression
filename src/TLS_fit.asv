@@ -18,6 +18,8 @@ N = floor(length(use_data_soc_meas)/3.0);
 as_log = []; 
 
 for block_idx = 1:N_blocks
+    (block_idx-1)*N+1
+    block_idx*N
 
     % Take a third of the data
     x = use_data_soc_meas( (block_idx-1)*N+1 : block_idx*N );
@@ -82,18 +84,20 @@ for block_idx = 1:N_blocks
    
 end
 
-x = use_data_soc_meas;
-y = use_data_r0_meas;
+x = use_data_soc_meas
+y = 
 
 % Plotting the result
 figure;
 plot(x, y, 'ko', 'DisplayName', 'Data'); hold on;
 
 for iter = 1:(N_blocks)
-    plot(x, -1* as_log(iter) *x, 'g--', 'LineWidth', 2, 'DisplayName', 'TLS Fit'); 
+    plot(x, as_log(iter) *x, 'g--', 'LineWidth', 2, 'DisplayName', 'TLS Fit'); 
     hold on;
 end
 
+
+plot(x, a_tls*x, 'r-', 'LineWidth', 2, 'DisplayName', 'TLS Fit');
 
 legend show;
 grid on;

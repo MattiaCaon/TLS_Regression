@@ -12,7 +12,7 @@ I_PULSE = 15.0;          % Discharge Current (A)
 DT = 0.5;                % Sampling step (s)
 
 % Timing Parameters
-TIME_PULSE = 20;          % Discharge duration (s)
+TIME_PULSE = 60;          % Discharge duration (s)
 TIME_REST = 180;          % Rest duration (s)
 
 % --- NOISE CONFIGURATION ---
@@ -34,7 +34,7 @@ ocv_meas = [2.80, 3.15, 3.30, 3.50, 3.60, 3.68, 3.76, 3.85, 3.94, 4.03, 4.11, 4.
 
 % Variable R0 function (Linear Interpolation points)
 r0_soc_x = [0.0,   0.1,   0.2,   0.4,   0.6,   0.8,   1.0];
-r0_val_y = [0.080, 0.048, 0.028, 0.020, 0.032, 0.025, 0.020]; % Ohm
+r0_val_y = [0.060, 0.038, 0.028, 0.018, 0.022, 0.020, 0.015]; % Ohm
 
 % Polynomial Fit (Degree 5)
 % MATLAB returns coefficients [p1, p2... pn], similar to numpy
@@ -263,4 +263,4 @@ ylabel('R0 ');
 % 4. Add a grid
 grid on;
 
-save("../res/dataset.mat", "use_data_r0_meas", "use_data_soc_meas", "NOISE_STD_DEV_V", "NOISE_STD_DEV_I")
+save("../res/dataset.mat", "use_data_r0_meas", "use_data_soc_meas", "NOISE_STD_DEV_V", )
