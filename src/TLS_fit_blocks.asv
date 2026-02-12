@@ -7,13 +7,13 @@ load("../res/dataset.mat")
 N_blocks = 3;
 sx = NOISE_STD_DEV_I; 
 sy = NOISE_STD_DEV_V; 
-N = floor(length(use_data_soc_meas)/N_blocks);
+N = floor(length(use_data_soc_meas)/3.0);
 
 % Initialize log
 as_log = []; 
 bs_log = []; % We need to store intercepts now
 
-colors = ['r', 'g', 'b', 'p', 'o']; % Colors for the blocks
+colors = ['r', 'g', 'b', '']; % Colors for the blocks
 
 figure;
 

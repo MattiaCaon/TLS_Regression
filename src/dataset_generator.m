@@ -1,122 +1,266 @@
 clear; clc; close all;
 
-% --- 1. SETUP DATA ---
-load("../res/dataset.mat")
+% ==========================================
+% 1. USER CONFIGURATION
+% ==========================================
 
-% --- CONFIGURATION ---
-N_blocks = 3;
-sx = NOISE_STD_DEV_I; 
-sy = NOISE_STD_DEV_V; 
-N = floor(length(use_data_soc_meas)/3.0);
+% Electrical Parameters
+CAPACITY_AH = 15.0;      % Nominal Capacity
+V_MAX = 4.2;             % Max Voltage (Full)
+V_MIN = 2.8;             % Cutoff Voltage (Empty)
+I_PULSE = 15.0;          % Discharge Current (A)
+DT = 0.5;                % Sampling step (s)
 
-% Initialize log
-as_log = []; 
-bs_log = []; % We need to store intercepts now
+% Timing Parameters
+TIME_PULSE = 20;          % Discharge duration (s)
+TIME_REST = 180;          % Rest duration (s)
 
-colors = ['r', 'g', 'b']; % Colors for the 3 blocks
+% --- NOISE CONFIGURATION ---
+NOISE_VARIANCE = 2.0e-3;
+NOISE_VARIANCE_I = 5.0e-2;
+NOISE_MEAN = 0.0;
 
-figure;
+% Calculate Standard Deviation (Sigma)
+NOISE_STD_DEV_V = sqrt(NOISE_VARIANCE);
+NOISE_STD_DEV_I = sqrt(NOISE_VARIANCE_I);
 
-for block_idx = 1:N_blocks
-    fprintf('\n--- Block %d ---\n', block_idx);
-    
-    % 1. Get Raw Data
-    x_raw = use_data_soc_meas( (block_idx-1)*N+1 : block_idx*N );
-    y_raw = use_data_r0_meas( (block_idx-1)*N+1 : block_idx*N ); 
-    
-    % 2. MEAN CENTERING (Crucial Step)
-    % We shift the data so its center is at (0,0).
-    % This allows your y=ax solver to find the correct rotation (slope).
-    mx = mean(x_raw);
-    my = mean(y_raw);
-    
-    x = x_raw - mx;
-    y = y_raw - my;
+% ==========================================
+% 2. PHYSICAL MODELING (LOOKUP & FIT)
+% ==========================================
 
-    N_iter = 4; 
-    
-    % --- 3. INITIALIZATION ---
-    si = diag([1/sx 1/sy]);
-    W = kron(si, eye(N));
-    
-    % Initial Guess using centered data
-    as = x \ y;     
-    xs = x;         
-    
-    % --- 4. ITERATIVE TLS SOLVER ---
-    fprintf('Iter |  Slope (a)  | Residual Norm\n');
-    fprintf('-----------------------------------\n');
-    
-    as_log_block = [];
+% OCV Fit Points (Typical NMC Li-Ion)
+soc_meas = [0.0, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.95, 1.0];
+ocv_meas = [2.80, 3.15, 3.30, 3.50, 3.60, 3.68, 3.76, 3.85, 3.94, 4.03, 4.11, 4.16, 4.20];
 
-    for iter = 1:N_iter
-        ys = as * xs;
-        
-        dx = x - xs;       
-        dy = y - ys;      
-        d = [dx; dy];      
-        
-        Gx = [eye(N), zeros(N,1)]; 
-        Gy = [as*eye(N), xs];       
-        G = [Gx; Gy];
-        
-        WG = W * G;
-        Wd = W * d;
-        
-        xx = WG \ Wd;
-        
-        xs = xs + xx(1:N);      
-        as = as + xx(N+1);  
+% Variable R0 function (Linear Interpolation points)
+r0_soc_x = [0.0,   0.1,   0.2,   0.4,   0.6,   0.8,   1.0];
+r0_val_y = [0.080, 0.048, 0.028, 0.020, 0.032, 0.025, 0.020]; % Ohm
 
-        % History of a_tls updates
-        as_log_block = [as_log_block; as];
-        
-        res_norm = norm(Wd);
-        fprintf('%4d | % .6f | %.4e\n', iter, as, res_norm);
+% Polynomial Fit (Degree 5)
+% MATLAB returns coefficients [p1, p2... pn], similar to numpy
+poly_coeffs_ocv = polyfit(soc_meas, ocv_meas, 5);
+poly_coeffs_r0 = polyfit(r0_soc_x, r0_val_y, 5);
+
+% ==========================================
+% 3. SIMULATION ENGINE
+% ==========================================
+
+% Initialize Simulation Variables
+current_soc = 1.0;
+current_soc_meas = 1.0;
+t = 0.0;
+last_meas_V = 4.2;
+last_meas_I = 0;
+
+% Pre-allocate data array (estimating size to improve speed, or growing dynamically)
+% Here we initialize empty for direct translation logic
+data_time = [];
+data_current = [];
+data_v_meas = [];
+data_v_clean = [];
+data_soc = [];
+data_ocv = [];
+data_r0_true = [];
+data_i_meas = [];
+data_r0_meas = [];
+
+use_data_r0_meas = [];
+use_data_soc_meas = [];
+
+fprintf('Starting simulation with Noise Variance: %e (StdDev: %.4f V)\n', NOISE_VARIANCE, NOISE_STD_DEV_V);
+
+while current_soc > 0
+
+    % --- DISCHARGE PHASE (PULSE) ---
+    current = I_PULSE;
+    steps = floor(TIME_PULSE / DT);
+    first_entrance = true;
+
+    for k = 1:steps
+        % Get True Params
+        soc_clipped = max(0.0, min(1.0, current_soc));
+        ocv = polyval(poly_coeffs_ocv, soc_clipped);
+        r0 = polyval(poly_coeffs_r0, soc_clipped);
+
+        % Ideal Voltage
+        v_clean = ocv - (r0 * current);
+
+        % Generate Noise
+        noise_sample = NOISE_MEAN + NOISE_STD_DEV_V * randn();
+        noise_sample_i = NOISE_MEAN + NOISE_STD_DEV_I * randn();
+
+        % Measured Values
+        v_noisy = v_clean + noise_sample;
+        i_noisy = current + noise_sample_i;
+
+        current_soc_meas = current_soc_meas - (i_noisy * DT) / (CAPACITY_AH * 3600);
+
+        % Calculate R0 (on step response)
+        if first_entrance
+            % Avoid division by zero if noise is perfectly zero (unlikely but safe to handle)
+            denom = i_noisy - last_meas_I;
+            if abs(denom) < 1e-9
+                r0_meas = 0;
+            else
+                r0_meas = abs((last_meas_V - v_noisy) / denom);
+            end
+            first_entrance = false;
+
+            % Save data that will be used for TLS
+            use_data_r0_meas = [use_data_r0_meas; r0_meas];
+            use_data_soc_meas = [use_data_soc_meas; current_soc_meas];
+        end
+
+        % Store Data
+        data_time = [data_time; t];
+        data_current = [data_current; current];
+        data_v_meas = [data_v_meas; v_noisy];
+        data_v_clean = [data_v_clean; v_clean];
+        data_soc = [data_soc; current_soc];
+        data_ocv = [data_ocv; ocv];
+        data_r0_true = [data_r0_true; r0];
+        data_i_meas = [data_i_meas; i_noisy];
+        data_r0_meas = [data_r0_meas; r0_meas];
+
+        % Coulomb Counting
+        current_soc = current_soc - (current * DT) / (CAPACITY_AH * 3600);
+        t = t + DT;
+
+        last_meas_V = v_noisy;
+        last_meas_I = i_noisy;
+
+        if ocv <= V_MIN || current_soc <= 0
+            break;
+        end
     end
-    
-    % --- 5. RESULTS RECOVERY ---
-    % The slope 'a' is correct.
-    % We must calculate 'b' (intercept) to map back to original coordinates.
-    % y = a*x + b  =>  mean_y = a*mean_x + b  =>  b = mean_y - a*mean_x
-    a_tls = as;
-    b_tls = my - a_tls * mx;
-    
-    as_log = [as_log; a_tls];
-    bs_log = [bs_log; b_tls];
 
-    for i = 1:N_iter
-        % Reconstruct the index for this block to plot the line segment only where data exists
-        idx_range = (block_idx-1)*N+1 : block_idx*N;
-        x_seg = use_data_soc_meas(idx_range);
-        
-        % Calculate y using y = ax + b
-        y_fit = as_log_block(i) * x_seg + bs_log(block_idx);
-        plot(x_seg, y_fit, [colors(block_idx) '--'], 'LineWidth', 2, 'DisplayName', sprintf('Fit Block %d (a=%.4f)', block_idx, as_log_block(i)));
-        hold on;
-    end    
-    
-    fprintf('Final TLS Model: y = %.4fx + %.4f\n', a_tls, b_tls);
+    if ocv <= V_MIN || current_soc <= 0
+        break;
+    end
+
+    % --- REST PHASE (REST) ---
+    current = 0.0;
+    steps = floor(TIME_REST / DT);
+    first_entrance = true;
+
+    for k = 1:steps
+        % Get True Params
+        soc_clipped = max(0.0, min(1.0, current_soc));
+        ocv = polyval(poly_coeffs_ocv, soc_clipped);
+        r0 = polyval(poly_coeffs_r0, soc_clipped);
+
+        v_clean = ocv; % At rest V = OCV
+
+        noise_sample = NOISE_MEAN + NOISE_STD_DEV_V * randn();
+        noise_sample_i = NOISE_MEAN + NOISE_STD_DEV_I * randn();
+
+        v_noisy = v_clean + noise_sample;
+        % Note: Python script had a likely bug using 'noise_sample' (voltage noise)
+        % for current here. We use 'noise_sample_i' for correctness.
+        i_noisy = current + noise_sample_i;
+
+        if first_entrance
+            denom = i_noisy - last_meas_I;
+            if abs(denom) < 1e-9
+                r0_meas = 0;
+            else
+                r0_meas = abs((last_meas_V - v_noisy) / denom);
+            end
+            first_entrance = false;
+
+            % Save data that will be used for TLS
+            use_data_r0_meas = [use_data_r0_meas; r0_meas];
+            use_data_soc_meas = [use_data_soc_meas; current_soc_meas];
+        end
+
+        % Store Data
+        data_time = [data_time; t];
+        data_current = [data_current; current];
+        data_v_meas = [data_v_meas; v_noisy];
+        data_v_clean = [data_v_clean; v_clean];
+        data_soc = [data_soc; current_soc];
+        data_ocv = [data_ocv; ocv];
+        data_r0_true = [data_r0_true; r0];
+        data_i_meas = [data_i_meas; i_noisy];
+        data_r0_meas = [data_r0_meas; r0_meas];
+
+        last_meas_V = v_noisy;
+        last_meas_I = i_noisy;
+
+        t = t + DT; % SoC does not change at rest
+    end
 end
 
-% --- PLOTTING ---
+% Create Table (DataFrame equivalent)
+df = table(data_time, data_current, data_v_meas, data_v_clean, ...
+           data_soc, data_ocv, data_r0_true, data_i_meas, data_r0_meas, ...
+           'VariableNames', {'Time_s', 'Current_A', 'Voltage_Measured_V', ...
+                             'Voltage_Clean_V', 'SoC', 'OCV_True_V', ...
+                             'R0_True_Ohm', 'Current_Meas', 'R0_Meas'});
 
-% Plot all raw data
+% ==========================================
+% 4. SAVING AND VISUALIZATION
+% ==========================================
+
+% Saving
+%filename = 'dataset_batteria_noisy.csv';
+%writetable(df, filename);
+%fprintf('Dataset saved: %s\n', filename);
+
+% Plot
+figure('Position', [100, 100, 1000, 800]);
+
+% Subplot 1: Voltage
+ax1 = subplot(3, 1, 1);
+hold on;
+plot(df.Time_s, df.Voltage_Measured_V, 'b--', 'LineWidth', 0.5, 'DisplayName', 'Tensione Misurata (Noisy)');
+plot(df.Time_s, df.Voltage_Clean_V, 'b', 'LineWidth', 1.5, 'DisplayName', 'Tensione Reale (Clean)');
+% Transparency (alpha) is harder in standard MATLAB plots without using 'patch',
+% so we stick to line styles for clarity.
+hold off;
+title(sprintf('Profilo di Scarica con Rumore Gaussiano (Var=%.1e)', NOISE_VARIANCE));
+ylabel('Voltage [V]');
+legend('show', 'Location', 'northeast');
 grid on;
 
-for i = 1:N_blocks
-    % Reconstruct the index for this block to plot the line segment only where data exists
-    idx_range = (i-1)*N+1 : i*N;
-    x_seg = use_data_soc_meas(idx_range);
-    
-    % Calculate y using y = ax + b
-    y_fit = as_log(i) * x_seg + bs_log(i);
-    
-    plot(x_seg, y_fit, [colors(i)], 'LineWidth', 2, 'DisplayName', sprintf('Final Fit %d (a=%.4f)', i, as_log(i)));  hold on;
-end
+% Subplot 2: Current
+ax2 = subplot(3, 1, 2);
+hold on;
+plot(df.Time_s, df.Current_Meas, 'r--', 'DisplayName', 'Current Noise (A)');
+plot(df.Time_s, df.Current_A, 'r', 'DisplayName', 'Current (A)');
+hold off;
+ylabel('Current [A]');
+ylim([-5, 20]);
+% Set y-axis text color to red
+ax2.YColor = 'r';
+legend('show', 'Location', 'northeast');
+grid on;
 
-plot(use_data_soc_meas, use_data_r0_meas, 'ko', 'DisplayName', 'Data', 'MarkerFaceColor', 'k', 'MarkerSize', 3); 
+% Subplot 3: Resistance
+ax3 = subplot(3, 1, 3);
+hold on;
+plot(df.Time_s, df.R0_True_Ohm * 1000, 'g', 'DisplayName', 'True R0 (mOhm)');
+plot(df.Time_s, df.R0_Meas * 1000, 'g--', 'DisplayName', 'Meas R0 (mOhm)');
+hold off;
+title(sprintf('Resistenza (Var=%.1e)', NOISE_VARIANCE));
+ylabel('Resistance [Ohm]');
+xlabel('Time [s]');
+legend('show', 'Location', 'northeast');
+grid on;
 
-legend show;
-title('TLS Fitting with Intercept Correction');
-xlabel('SOC'); ylabel('R0');
+linkaxes([ax1, ax2, ax3], 'x');
+
+
+% 2. Plot the graph
+figure;               % Opens a new figure window
+plot(use_data_soc_meas, use_data_r0_meas, 'b--');    % Plots x vs y. 'b-o' means blue line with circle markers
+
+% 3. Add labels and title
+title('R0 vs SOC plot');
+xlabel('SOC');
+ylabel('R0 ');
+
+% 4. Add a grid
+grid on;
+
+save("../res/dataset.mat", "use_data_r0_meas", "use_data_soc_meas", "NOISE_STD_DEV_V", "NOISE_STD_DEV_I")
