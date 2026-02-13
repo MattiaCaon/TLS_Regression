@@ -56,7 +56,8 @@ for block_idx = 1:N_blocks
     
     % Init
     N_iter = 4; 
-    as_log_block = zeros(N_iter);
+    as_log_block = zeros(N_iter, 1);
+    bs_log_block = zeros(N_iter, 1);
     
 
     %%%%%%%%%%%%%%%%%%%% 3) Iterative process %%%%%%%%%%%%%%%%%%%%
@@ -86,6 +87,7 @@ for block_idx = 1:N_blocks
 
         % Update history of a_tls
         as_log_block(iter) = as;
+        bs_log_block(iter) = my - as * mx;
         
         res_norm = norm(Wd);
         res_norm_expl = sqrt(sum(Wd.^2));
@@ -100,9 +102,6 @@ for block_idx = 1:N_blocks
     % y = a*x + b  =>  mean_y = a*mean_x + b  =>  b = mean_y - a*mean_x
     a_tls = as;
     b_tls = my - a_tls * mx;
-    
-    as_log = [as_log; a_tls];
-    bs_log = [bs_log; b_tls];
 
     % Reconstruct the index for this block to plot the line segment only where data exists
     idx_range = (block_idx-1)*N+1 : block_idx*N;
@@ -110,7 +109,7 @@ for block_idx = 1:N_blocks
 
     % Calculate y using y = ax + b (for every iteration)
     for i = 1:N_iter    
-        y_fit = as_log_block(i) * x_seg + bs_log(block_idx);
+        y_fit = as_log_block(i) * x_seg + bs_log_block(i);
         plot(x_seg, y_fit, [colors(block_idx) '--'], 'LineWidth', 2, 'DisplayName', sprintf('Fit Block %d (a=%.4f)', block_idx, as_log_block(i)));
         hold on;
     end    

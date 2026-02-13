@@ -73,6 +73,7 @@ for block_idx = 1:N_blocks
     a_tls = as;
     b_tls = my - a_tls * mx;
 
+    b_tls_not_whitened = my - as_SVD_not_whitened * mx;
 
     %%%%%%%%%%%%%%%%%%%% 6) Data plotting %%%%%%%%%%%%%%%%%%%%
 
@@ -86,7 +87,7 @@ for block_idx = 1:N_blocks
     hold on;
 
     % Plot SVD (wrong one)
-    y_fit = as_SVD_not_whitened * x_seg + b_tls;
+    y_fit = as_SVD_not_whitened * x_seg + b_tls_not_whitened;
     plot(x_seg, y_fit, [colors(block_idx) '--'], 'LineWidth', 2, 'DisplayName', sprintf('Fit Block %d (a=%.4f)', block_idx, a_tls));
     hold on;
     
