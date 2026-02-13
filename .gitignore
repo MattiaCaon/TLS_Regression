@@ -29,3 +29,7 @@ sdist/
 var/
 wheels/
 *.egg-info/
+
+# Matlab backup files
+*.asv
+
