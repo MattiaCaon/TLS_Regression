@@ -1,55 +1,29 @@
-%{
-clear, clc
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-Z = [x./sx y./sy];
-[U,S,V] = svd(Z);
-v2 = V(:,2);
-as = -v2(1)/v2(2)*sy/sx; % riportiamo le misure al di fuori dello spazio normalizzato
-a_stim_SVD = as;
-
-% Prendiamo la migliore approssimazione (v1) e otteniamo cosi' lo
-% scarto quadratico medio
-Z1 = U(:,1)*S(1,1)*V(:,1)';
-xs = Z1(:,1)*sx;
-Jx = mean((x - xs).^2); 
-
-rms_x_svd = sqrt(Jx);
-T{4,1} = 'TLS SVD';
-T{4,2} = mean(a_stim_SVD - at);
-T{4,3} = std(a_stim_SVD - at);
-T{4,4} = sqrt(mean((a_stim_SVD - at).^2));
-T
-%}
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%5
-
 clear; clc; close all;
 
-% --- 1. SETUP DATA ---
+% LOAD THE DATASET
 load("../res/dataset.mat")
 
-% --- CONFIGURATION ---
+% CONFIGURATION
 N_blocks = 3;
-sx = NOISE_STD_DEV_I; 
-sy = NOISE_STD_DEV_V; 
-N = floor(length(use_data_soc_meas)/N_blocks);
+sx = NOISE_STD_DEV_SOC; 
+sy = NOISE_STD_DEV_R0; 
+N = floor(length(use_data_soc_meas)/N_blocks); % Data for each block
 
-% Initialize log
-as_log = []; 
-bs_log = []; % We need to store intercepts now
+fprintf('\nDataset data:\n\tstd_dev_x: %.5f\n\tstd_dev_x: %.5f', sx, sy);
 
-colors = ['r', 'g', 'b', 'p', 'o']; % Colors for the blocks
 
+
+% PLOT INIT
 figure;
 grid on;
+colors = ['r', 'g', 'b'];
 
+% BLOCKS 
 for block_idx = 1:N_blocks
     fprintf('\n--- Block %d ---\n', block_idx);
     
 
-    %%%%%%%%%%%%%%%%%%%% 1) Get Raw Data %%%%%%%%%%%%%%%%%%%%
+    %%%%%%%%%%%%%%%%%%%% 1) Get raw data partion %%%%%%%%%%%%%%%%%%%%
 
     % Partitionate data
     x_raw = use_data_soc_meas( (block_idx-1)*N+1 : block_idx*N );
@@ -58,24 +32,23 @@ for block_idx = 1:N_blocks
 
     %%%%%%%%%%%%%%%%%%%%% 2) Mean centering %%%%%%%%%%%%%%%%%%%%
 
-    % We shift the data so its center is at (0,0).
-    % This allows your y=ax solver to find the correct rotation (slope).
+    % Shift the data so its center is at (0,0).
+    % This allows y=ax solver to find the correct slope.
     mx = mean(x_raw);
     my = mean(y_raw);
-    
     x = x_raw - mx;
     y = y_raw - my;
 
 
-    %%%%%%%%%%%%%%%%%%%% 3) ACTUAL CALCULATION %%%%%%%%%%%%%%%%%%%%
+    %%%%%%%%%%%%%%%%%%%% 3) Actual calculation %%%%%%%%%%%%%%%%%%%%
     
     % -- SVD calculation --
     Z = [x./sx y./sy];
     [U,S,V] = svd(Z);
     v2 = V(:,2);
-    as = -v2(1)/v2(2)*sy/sx; % riportiamo le misure al di fuori dello spazio normalizzato
+    as = -v2(1)/v2(2)*sy/sx; % Restore the original variable space (note the sigma coefficient)
     
-    % Prendiamo la migliore approssimazione (v1) e otteniamo cosi' lo scarto quadratico medio
+    % From the best approximation of Z (v1) we extract the RMS
     Z1 = U(:,1)*S(1,1)*V(:,1)';
     xs = Z1(:,1)*sx;
     Jx = mean((x - xs).^2); 
@@ -86,28 +59,24 @@ for block_idx = 1:N_blocks
     [U,S,V] = svd(Z);
     v2 = V(:,2);
     as_SVD_not_whitened = -v2(1)/v2(2);
-
     Z1 = U(:,1)*S(1,1)*V(:,1)';
     xs = Z1(:,1);
     Jx = mean((x - xs).^2); 
     rms_x_svd_not_whitened = sqrt(Jx);
 
 
-    %%%%%%%%%%%%%%%%%%%% 5) RESULTS RECOVERY %%%%%%%%%%%%%%%%%%%%
+    %%%%%%%%%%%%%%%%%%%% 5) Finalizing the results %%%%%%%%%%%%%%%%%%%%
 
     % The slope 'a' is correct.
-    % We must calculate 'b' (intercept) to map back to original coordinates.
+    % Calculate 'b' (intercept) to map back to original coordinates.
     % y = a*x + b  =>  mean_y = a*mean_x + b  =>  b = mean_y - a*mean_x
     a_tls = as;
     b_tls = my - a_tls * mx;
-    
-    as_log = [as_log; a_tls];
-    bs_log = [bs_log; b_tls];
 
 
-    %%%%%%%%%%%%%%%%%%%% 6) PLOTTING %%%%%%%%%%%%%%%%%%%%
+    %%%%%%%%%%%%%%%%%%%% 6) Data plotting %%%%%%%%%%%%%%%%%%%%
 
-    % Reconstruct the index for this block to plot the line segment only where data exists
+    % Reconstruct the index range for this block to plot only where data is valid
     idx_range = (block_idx-1)*N+1 : block_idx*N;
     x_seg = use_data_soc_meas(idx_range);
 
@@ -121,6 +90,7 @@ for block_idx = 1:N_blocks
     plot(x_seg, y_fit, [colors(block_idx) '--'], 'LineWidth', 2, 'DisplayName', sprintf('Fit Block %d (a=%.4f)', block_idx, a_tls));
     hold on;
     
+    % Info printing
     fprintf('Final TLS SVD Model: y = %.4fx + %.4f\n', a_tls, b_tls);
     fprintf('RMS whitened:     %.4f\n',rms_x_svd);
     fprintf('RMS not whitened: %.4f\n',rms_x_svd_not_whitened);

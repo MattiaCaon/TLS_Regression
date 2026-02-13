@@ -263,4 +263,8 @@ ylabel('R0 ');
 % 4. Add a grid
 grid on;
 
-save("../res/dataset.mat", "use_data_r0_meas", "use_data_soc_meas", "NOISE_STD_DEV_V", "NOISE_STD_DEV_I")
+% Derivated std deviation
+NOISE_STD_DEV_SOC = std(use_data_soc_meas);
+NOISE_STD_DEV_R0 = std(use_data_r0_meas);
+
+save("../res/dataset.mat", "use_data_r0_meas", "use_data_soc_meas", "NOISE_STD_DEV_V", "NOISE_STD_DEV_I", "NOISE_STD_DEV_SOC", "NOISE_STD_DEV_R0")
