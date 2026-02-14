@@ -13,7 +13,7 @@ DT = 0.5;                % Sampling step (s)
 
 % Timing Parameters
 TIME_PULSE = 20;          % Discharge duration (s)
-TIME_REST = 180;          % Rest duration (s)
+TIME_REST = 20;          % Rest duration (s)
 
 % --- NOISE CONFIGURATION ---
 NOISE_VARIANCE = 2.0e-3;
@@ -48,6 +48,7 @@ poly_coeffs_r0 = polyfit(r0_soc_x, r0_val_y, 5);
 % Initialize Simulation Variables
 current_soc = 1.0;
 current_soc_meas = 1.0;
+current_soc_actual = 1.0;
 t = 0.0;
 last_meas_V = 4.2;
 last_meas_I = 0;
@@ -65,7 +66,9 @@ data_i_meas = [];
 data_r0_meas = [];
 
 use_data_r0_meas = [];
+use_data_r0_actual = [];
 use_data_soc_meas = [];
+use_data_soc_actual = [];
 
 fprintf('Starting simulation with Noise Variance: %e (StdDev: %.4f V)\n', NOISE_VARIANCE, NOISE_STD_DEV_V);
 
@@ -94,6 +97,7 @@ while current_soc > 0
         i_noisy = current + noise_sample_i;
 
         current_soc_meas = current_soc_meas - (i_noisy * DT) / (CAPACITY_AH * 3600);
+        current_soc_actual = current_soc_actual - (current * DT) / (CAPACITY_AH * 3600);
 
         % Calculate R0 (on step response)
         if first_entrance
@@ -108,7 +112,10 @@ while current_soc > 0
 
             % Save data that will be used for TLS
             use_data_r0_meas = [use_data_r0_meas; r0_meas];
+            use_data_r0_actual = [use_data_r0_actual; r0];
+
             use_data_soc_meas = [use_data_soc_meas; current_soc_meas];
+            use_data_soc_actual = [use_data_soc_actual; current_soc_actual];
         end
 
         % Store Data
@@ -158,6 +165,7 @@ while current_soc > 0
         % Note: Python script had a likely bug using 'noise_sample' (voltage noise)
         % for current here. We use 'noise_sample_i' for correctness.
         i_noisy = current + noise_sample_i;
+        current_soc_meas = current_soc_meas - (i_noisy * DT) / (CAPACITY_AH * 3600);
 
         if first_entrance
             denom = i_noisy - last_meas_I;
@@ -170,7 +178,10 @@ while current_soc > 0
 
             % Save data that will be used for TLS
             use_data_r0_meas = [use_data_r0_meas; r0_meas];
+            use_data_r0_actual = [use_data_r0_actual; r0];
+
             use_data_soc_meas = [use_data_soc_meas; current_soc_meas];
+            use_data_soc_actual = [use_data_soc_actual; current_soc_actual];
         end
 
         % Store Data
@@ -252,19 +263,31 @@ linkaxes([ax1, ax2, ax3], 'x');
 
 
 % 2. Plot the graph
-figure;               % Opens a new figure window
-plot(use_data_soc_meas, use_data_r0_meas, 'b--');    % Plots x vs y. 'b-o' means blue line with circle markers
-
-% 3. Add labels and title
-title('R0 vs SOC plot');
-xlabel('SOC');
-ylabel('R0 ');
-
-% 4. Add a grid
-grid on;
+if 0 
+    figure;               % Opens a new figure window
+    plot(use_data_soc_meas, use_data_r0_meas, 'b--');    % Plots x vs y. 'b-o' means blue line with circle markers
+    
+    % 3. Add labels and title
+    title('R0 vs SOC plot');
+    xlabel('SOC');
+    ylabel('R0 ');
+    
+    % 4. Add a grid
+    grid on;
+end
 
 % Derivated std deviation
-NOISE_STD_DEV_SOC = std(use_data_soc_meas);
-NOISE_STD_DEV_R0 = std(use_data_r0_meas);
+
+diff_soc = use_data_soc_actual - use_data_soc_meas;
+diff_squared_soc = diff_soc.^2;
+NOISE_STD_DEV_SOC = sqrt(mean(diff_squared_soc));
+
+diff_r0 = use_data_r0_actual - use_data_r0_meas;
+diff_squared_r0 = diff_r0.^2;
+NOISE_STD_DEV_R0 = sqrt(mean(diff_squared_r0));
+
+figure
+plot(diff_soc, 'b--');
+
 
 save("../res/dataset.mat", "use_data_r0_meas", "use_data_soc_meas", "NOISE_STD_DEV_V", "NOISE_STD_DEV_I", "NOISE_STD_DEV_SOC", "NOISE_STD_DEV_R0")

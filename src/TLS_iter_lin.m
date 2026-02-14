@@ -9,10 +9,6 @@ sx = NOISE_STD_DEV_SOC;
 sy = NOISE_STD_DEV_R0; 
 N = floor(length(use_data_soc_meas)/N_blocks);
 
-% INIT HISTORY VECTORS
-as_log = []; 
-bs_log = [];
-
 % PLOT INIT
 figure;
 grid on;
@@ -27,18 +23,18 @@ for block_idx = 1:N_blocks
 
     % Partitionate data
     x_raw = use_data_soc_meas( (block_idx-1)*N +1 : block_idx*N );
-    y_raw = use_data_r0_meas( (block_idx-1)* N+1 : block_idx*N ); 
+    y_raw = use_data_r0_meas( (block_idx-1)*N +1 : block_idx*N ); 
     
 
      %%%%%%%%%%%%%%%%%%%%% 2) Mean centering %%%%%%%%%%%%%%%%%%%%
 
     % Shift the data so its center is at (0,0).
     % This allows y=ax solver to find the correct slope.
-    mx = mean(x_raw);
-    my = mean(y_raw);
+    mean_x = mean(x_raw);
+    mean_y = mean(y_raw);
     
-    x = x_raw - mx;
-    y = y_raw - my;
+    x = x_raw - mean_x;
+    y = y_raw - mean_y;
 
     
     %%%%%%%%%%%%%%%%%%%% 3) Actual calculation %%%%%%%%%%%%%%%%%%%%
@@ -55,7 +51,7 @@ for block_idx = 1:N_blocks
     xs = x;         
     
     % Init
-    N_iter = 4; 
+    N_iter = 10; 
     as_log_block = zeros(N_iter, 1);
     bs_log_block = zeros(N_iter, 1);
     
@@ -87,11 +83,10 @@ for block_idx = 1:N_blocks
 
         % Update history of a_tls
         as_log_block(iter) = as;
-        bs_log_block(iter) = my - as * mx;
+        bs_log_block(iter) = mean_y - as * mean_x;
         
-        res_norm = norm(Wd);
-        res_norm_expl = sqrt(sum(Wd.^2));
-        fprintf('%4d | % .6f | %.5f (%.5f)\n', iter, as, res_norm, res_norm_expl);
+        res_norm_expl = sqrt(sum(delta_d.^2));
+        fprintf('%4d | % .6f | %.5f\n', iter, as, res_norm_expl);
         
     end
     
@@ -101,7 +96,7 @@ for block_idx = 1:N_blocks
     % Calculate 'b' (intercept) to map back to original coordinates.
     % y = a*x + b  =>  mean_y = a*mean_x + b  =>  b = mean_y - a*mean_x
     a_tls = as;
-    b_tls = my - a_tls * mx;
+    b_tls = mean_y - a_tls * mean_x;
 
     % Reconstruct the index for this block to plot the line segment only where data exists
     idx_range = (block_idx-1)*N+1 : block_idx*N;
@@ -109,14 +104,14 @@ for block_idx = 1:N_blocks
 
     % Calculate y using y = ax + b (for every iteration)
     for i = 1:N_iter    
-        y_fit = as_log_block(i) * x_seg + bs_log_block(i);
-        plot(x_seg, y_fit, [colors(block_idx) '--'], 'LineWidth', 2, 'DisplayName', sprintf('Fit Block %d (a=%.4f)', block_idx, as_log_block(i)));
+        y_fit = x_seg * as_log_block(i) + bs_log_block(i);
+        plot(x_seg, y_fit, [colors(1) '--'], 'LineWidth', 2, 'DisplayName', sprintf('Fit Block %d (a=%.4f)', block_idx, as_log_block(i)));
         hold on;
     end    
 
     % Calculate and plot the final fit
     y_fit = a_tls * x_seg + b_tls;
-    plot(x_seg, y_fit, [colors(block_idx)], 'LineWidth', 2, 'DisplayName', sprintf('Final Fit %d (a=%.4f)', i, a_tls));  hold on;
+    plot(x_seg, y_fit, [colors(2)], 'LineWidth', 2, 'DisplayName', sprintf('Final Fit %d (a=%.4f)', i, a_tls));  hold on;
     
     % Info printing
     fprintf('Final TLS Model: y = %.4fx + %.4f\n', a_tls, b_tls);
@@ -128,6 +123,7 @@ end
 plot(use_data_soc_meas, use_data_r0_meas, 'ko', 'DisplayName', 'Data', 'MarkerFaceColor', 'k', 'MarkerSize', 3); 
 
 % Finishing up the plot
+ylim([0 0.1])
 legend show;
 title('TLS Fitting with Intercept Correction');
 xlabel('SOC'); ylabel('R0');

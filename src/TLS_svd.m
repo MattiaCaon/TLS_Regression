@@ -4,7 +4,7 @@ clear; clc; close all;
 load("../res/dataset.mat")
 
 % CONFIGURATION
-N_blocks = 3;
+N_blocks = 6;
 sx = NOISE_STD_DEV_SOC; 
 sy = NOISE_STD_DEV_R0; 
 N = floor(length(use_data_soc_meas)/N_blocks); % Data for each block
@@ -83,12 +83,12 @@ for block_idx = 1:N_blocks
 
     % Plot SVD (ok)
     y_fit = a_tls * x_seg + b_tls;
-    plot(x_seg, y_fit, [colors(block_idx)], 'LineWidth', 2, 'DisplayName', sprintf('Fit Block %d (a=%.4f)', block_idx, a_tls));
+    plot(x_seg, y_fit, [colors(1)], 'LineWidth', 2, 'DisplayName', sprintf('Fit Block %d (a=%.4f)', block_idx, a_tls));
     hold on;
 
     % Plot SVD (wrong one)
     y_fit = as_SVD_not_whitened * x_seg + b_tls_not_whitened;
-    plot(x_seg, y_fit, [colors(block_idx) '--'], 'LineWidth', 2, 'DisplayName', sprintf('Fit Block %d (a=%.4f)', block_idx, a_tls));
+    plot(x_seg, y_fit, [colors(1) '--'], 'LineWidth', 2, 'DisplayName', sprintf('Fit Block %d (a=%.4f)', block_idx, a_tls));
     hold on;
     
     % Info printing
