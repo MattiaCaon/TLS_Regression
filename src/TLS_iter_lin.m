@@ -14,15 +14,20 @@ N_blocks = 3;
 sx = NOISE_STD_DEV_SOC; 
 sy = NOISE_STD_DEV_R0; 
 N = floor(length(use_data_soc_meas)/N_blocks);
+N_iter = 8;
+weighted_sq_err_history = zeros(N_blocks, N_iter);
 
 % PLOT INIT
 figure;
 grid on;
 colors = ['r', 'g', 'b'];
 
+
 % BLOCKS 
 for block_idx = 1:N_blocks
-    fprintf('\n--- Block %d ---\n', block_idx);
+    fprintf('\n\n%s\n', repmat('-', 1, 46)); % Print a separator line
+    fprintf('%s Block  %d %s\n', repmat('-', 1, 18), block_idx, repmat('-', 1, 18));
+    fprintf('%s\n', repmat('-', 1, 46));
     
 
     %%%%%%%%%%%%%%%%%%%% 1) Get raw data partion %%%%%%%%%%%%%%%%%%%%
@@ -45,7 +50,8 @@ for block_idx = 1:N_blocks
     
     %%%%%%%%%%%%%%%%%%%% 3) Actual calculation %%%%%%%%%%%%%%%%%%%%
     
-    fprintf('     | Slope:    | Cost (Chi2) Desc) | Norm: (Incr)\n');
+    fprintf('%4s | %11s | %13s | %8s\n', 'Iter', 'Slope', 'Cost (Chi2)', 'Norm');
+    fprintf('%s\n', repmat('-', 1, 46)); % Print a separator line
 
     % Construct weight coefficients matrix (std)
     si = diag([1/sx 1/sy]);
@@ -56,7 +62,6 @@ for block_idx = 1:N_blocks
     xs = x;         
     
     % Init
-    N_iter = 13; 
     as_log_block = zeros(N_iter, 1);
     bs_log_block = zeros(N_iter, 1);
     
@@ -92,12 +97,13 @@ for block_idx = 1:N_blocks
         
         % Calculate the COST FUNCTION properly
         % This is what the math is actually minimizing:
-        weighted_sq_err = sum( (dx/sx).^2 + (dy/sy).^2 );
+        weighted_sq_err = mean( (dx/sx).^2 + (dy/sy).^2 );
+        weighted_sq_err_history(block_idx, iter) = weighted_sq_err;
         
-        % This is just for your curiosity (will likely go UP)
-        euclidean_norm = sqrt(sum(dx.^2 + dy.^2));
+        % This is just for curiosity (will likely go up)
+        euclidean_norm = sqrt(mean(dx.^2 + dy.^2));
     
-        fprintf('%4d | %.6f |  %.4f | %.4f \n', iter, as, weighted_sq_err, euclidean_norm);
+        fprintf('%4d | %11.6f | %13.6f | %8.6f\n', iter, as, weighted_sq_err, euclidean_norm);
         
     end
     
@@ -134,7 +140,14 @@ end
 plot(use_data_soc_meas, use_data_r0_meas, 'ko', 'DisplayName', 'Data', 'MarkerFaceColor', 'k', 'MarkerSize', 3); 
 
 % Finishing up the plot
-ylim([0 0.1])
+ylim([0 0.100])
 legend show;
 title('TLS Fitting with Intercept Correction');
 xlabel('SOC'); ylabel('R0');
+
+% Residual decrease
+figure
+for block_idx = 1:N_blocks
+    plot(weighted_sq_err_history(block_idx,:)); hold on;
+    title('Statistical residual over iterations');
+end

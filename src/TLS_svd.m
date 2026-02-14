@@ -26,7 +26,9 @@ colors = ['r', 'g', 'b'];
 
 % BLOCKS 
 for block_idx = 1:N_blocks
-    fprintf('\n--- Block %d ---\n', block_idx);
+    fprintf('\n\n%s\n', repmat('-', 1, 46)); % Print a separator line
+    fprintf('%s Block  %d %s\n', repmat('-', 1, 18), block_idx, repmat('-', 1, 18));
+    fprintf('%s\n', repmat('-', 1, 46));
     
 
     %%%%%%%%%%%%%%%%%%%% 1) Get raw data partion %%%%%%%%%%%%%%%%%%%%
@@ -47,8 +49,6 @@ for block_idx = 1:N_blocks
 
 
     %%%%%%%%%%%%%%%%%%%% 3) Actual calculation %%%%%%%%%%%%%%%%%%%%
-    
-    % ... (Your SVD setup remains the same) ...
     
     % 1. WEIGHTED TLS EVALUATION (The "Honest" Solver)
     % A. Whitening
@@ -72,8 +72,8 @@ for block_idx = 1:N_blocks
     dx_w = x - x_fit_w;
     dy_w = y - y_fit_w;
     
-    % --- THE CORRECT METRICS ---
-    % 1. Statistical Cost (Chi-Squared): Weighted TLS minimizes THIS.
+    % --- METRICS ---
+    % 1. Statistical Cost (Chi-Squared): Weighted TLS minimizes this.
     cost_stat_w = mean( (dx_w./sx).^2 + (dy_w./sy).^2 ); 
     
     % 2. Geometric Cost (Euclidean): Weighted TLS ignores this.
@@ -82,7 +82,7 @@ for block_idx = 1:N_blocks
 
 
     % 2. UNWEIGHTED TLS EVALUATION (The "Overfitting" Solver)
-    % A. Raw Data (No Whitening)
+    % A. Raw Data
     Z_u = [x, y];
     [U_u, S_u, V_u] = svd(Z_u, 0);
     
@@ -104,27 +104,21 @@ for block_idx = 1:N_blocks
     % 1. Statistical Cost (Chi-Squared)
     cost_stat_u = mean( (dx_u./sx).^2 + (dy_u./sy).^2 );
     
-    % 2. Geometric Cost (Euclidean): Unweighted TLS minimizes THIS.
+    % 2. Geometric Cost (Euclidean): Unweighted TLS minimizes this.
     cost_geom_u = mean( dx_u.^2 + dy_u.^2 );
     
     % 3. FINAL COMPARISON PRINT
-    fprintf('\n--- METHOD COMPARISON (Lower is Better for its own domain) ---\n');
-    fprintf('1. STATISTICAL COST (Did we respect the noise sigma?)\n');
-    fprintf('   Weighted TLS:   %.7f  <-- Should be LOWER (Winner)\n', cost_stat_w);
+    fprintf('1. STATISTICAL COST \n');
+    fprintf('%s\n', repmat('-', 1, 46));
+    fprintf('   Weighted TLS:   %.7f\n', cost_stat_w);
     fprintf('   Unweighted TLS: %.7f\n', cost_stat_u);
     
-    fprintf('2. GEOMETRIC COST (Did we fit the point cloud shape?)\n');
+    fprintf('%s\n', repmat('-', 1, 46));
+    fprintf('2. GEOMETRIC COST\n');
+    fprintf('%s\n', repmat('-', 1, 46));
     fprintf('   Weighted TLS:   %.7f\n', cost_geom_w);
-    fprintf('   Unweighted TLS: %.7f  <-- Should be LOWER (Winner)\n', cost_geom_u);
+    fprintf('   Unweighted TLS: %.7f\n', cost_geom_u);
     
-    % If you have the true slope from your simulation (e.g., from an earlier variable 'true_a'):
-    if exist('use_data_r0_actual', 'var')
-        % Calculate local true slope (approximate)
-        % For demo purposes, let's assume you stored the true R0 mean for this block
-        r0_true_mean = mean(use_data_r0_actual( (block_idx-1)*N +1 : block_idx*N ));
-        % Note: Slope 'a' is dR0/dSOC. In your model, check if you have a variable for this.
-        % If not, just comparing stability is enough.
-    end
 
     %%%%%%%%%%%%%%%%%%%% 6) Data plotting %%%%%%%%%%%%%%%%%%%%
 
@@ -134,7 +128,7 @@ for block_idx = 1:N_blocks
 
     % Plot SVD (ok)
     y_fit = a_weighted * x_seg + b_weighted;
-    plot(x_seg, y_fit, [colors(1)], 'LineWidth', 2, 'DisplayName', sprintf('Fit Block %d (a=%.4f)', block_idx, a_weighted));
+    plot(x_seg, y_fit, [colors(2)], 'LineWidth', 2, 'DisplayName', sprintf('Fit Block %d (a=%.4f)', block_idx, a_weighted));
     hold on;
 
     % Plot SVD (wrong one)
