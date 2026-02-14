@@ -16,12 +16,12 @@ TIME_PULSE = 20;          % Discharge duration (s)
 TIME_REST = 20;          % Rest duration (s)
 
 % --- NOISE CONFIGURATION ---
-NOISE_VARIANCE = 2.0e-3;
-NOISE_VARIANCE_I = 5.0e-2;
+NOISE_VARIANCE_V = 1.0e-3;
+NOISE_VARIANCE_I = 5.0e-1;
 NOISE_MEAN = 0.0;
 
 % Calculate Standard Deviation (Sigma)
-NOISE_STD_DEV_V = sqrt(NOISE_VARIANCE);
+NOISE_STD_DEV_V = sqrt(NOISE_VARIANCE_V);
 NOISE_STD_DEV_I = sqrt(NOISE_VARIANCE_I);
 
 % ==========================================
@@ -70,7 +70,7 @@ use_data_r0_actual = [];
 use_data_soc_meas = [];
 use_data_soc_actual = [];
 
-fprintf('Starting simulation with Noise Variance: %e (StdDev: %.4f V)\n', NOISE_VARIANCE, NOISE_STD_DEV_V);
+fprintf('Starting simulation with Noise Variance: %e (StdDev: %.4f V)\n', NOISE_VARIANCE_V, NOISE_STD_DEV_V);
 
 while current_soc > 0
 
@@ -96,8 +96,17 @@ while current_soc > 0
         v_noisy = v_clean + noise_sample;
         i_noisy = current + noise_sample_i;
 
-        current_soc_meas = current_soc_meas - (i_noisy * DT) / (CAPACITY_AH * 3600);
         current_soc_actual = current_soc_actual - (current * DT) / (CAPACITY_AH * 3600);
+
+        v_sensor_reading = ocv + NOISE_STD_DEV_V * randn();
+        
+        % 2. Look up the SOC that corresponds to this noisy voltage
+        %    We use 'interp1' to reverse the OCV table (Y -> X)
+        %    'linear' is fast; 'extrap' handles values slightly outside range
+        current_soc_meas = interp1(ocv_meas, soc_meas, v_sensor_reading, 'linear', 'extrap');
+        
+        % 3. Clip it to stay realistic (0 to 1)
+        current_soc_meas = max(0.0, min(1.0, current_soc_meas));
 
         % Calculate R0 (on step response)
         if first_entrance
@@ -165,7 +174,6 @@ while current_soc > 0
         % Note: Python script had a likely bug using 'noise_sample' (voltage noise)
         % for current here. We use 'noise_sample_i' for correctness.
         i_noisy = current + noise_sample_i;
-        current_soc_meas = current_soc_meas - (i_noisy * DT) / (CAPACITY_AH * 3600);
 
         if first_entrance
             denom = i_noisy - last_meas_I;
@@ -229,7 +237,7 @@ plot(df.Time_s, df.Voltage_Clean_V, 'b', 'LineWidth', 1.5, 'DisplayName', 'Tensi
 % Transparency (alpha) is harder in standard MATLAB plots without using 'patch',
 % so we stick to line styles for clarity.
 hold off;
-title(sprintf('Profilo di Scarica con Rumore Gaussiano (Var=%.1e)', NOISE_VARIANCE));
+title(sprintf('Profilo di Scarica con Rumore Gaussiano (Var=%.1e)', NOISE_VARIANCE_V));
 ylabel('Voltage [V]');
 legend('show', 'Location', 'northeast');
 grid on;
@@ -253,7 +261,7 @@ hold on;
 plot(df.Time_s, df.R0_True_Ohm * 1000, 'g', 'DisplayName', 'True R0 (mOhm)');
 plot(df.Time_s, df.R0_Meas * 1000, 'g--', 'DisplayName', 'Meas R0 (mOhm)');
 hold off;
-title(sprintf('Resistenza (Var=%.1e)', NOISE_VARIANCE));
+title(sprintf('Resistenza (Var=%.1e)', NOISE_VARIANCE_V));
 ylabel('Resistance [Ohm]');
 xlabel('Time [s]');
 legend('show', 'Location', 'northeast');
@@ -265,7 +273,7 @@ linkaxes([ax1, ax2, ax3], 'x');
 % 2. Plot the graph
 if 0 
     figure;               % Opens a new figure window
-    plot(use_data_soc_meas, use_data_r0_meas, 'b--');    % Plots x vs y. 'b-o' means blue line with circle markers
+    plot(use_data_soc_meas, use_data_r0_meas, 'b--');
     
     % 3. Add labels and title
     title('R0 vs SOC plot');

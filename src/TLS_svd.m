@@ -3,13 +3,19 @@ clear; clc; close all;
 % LOAD THE DATASET
 load("../res/dataset.mat")
 
+% Sort the data based on SOC, thus avoiding overlaps due to unordered data
+% ArrayA and capture the indices
+[use_data_soc_meas, sortIdx] = sort(use_data_soc_meas);
+% Apply the same indices to ArrayB
+use_data_r0_meas = use_data_r0_meas(sortIdx);
+
 % CONFIGURATION
-N_blocks = 6;
+N_blocks = 3;
 sx = NOISE_STD_DEV_SOC; 
 sy = NOISE_STD_DEV_R0; 
 N = floor(length(use_data_soc_meas)/N_blocks); % Data for each block
 
-fprintf('\nDataset data:\n\tstd_dev_x: %.5f\n\tstd_dev_x: %.5f', sx, sy);
+fprintf('\nDataset data:\n\tstd_dev_x: %.8f\n\tstd_dev_y: %.8f', sx, sy);
 
 
 
@@ -42,38 +48,83 @@ for block_idx = 1:N_blocks
 
     %%%%%%%%%%%%%%%%%%%% 3) Actual calculation %%%%%%%%%%%%%%%%%%%%
     
-    % -- SVD calculation --
-    Z = [x./sx y./sy];
-    [U,S,V] = svd(Z);
-    v2 = V(:,2);
-    as = -v2(1)/v2(2)*sy/sx; % Restore the original variable space (note the sigma coefficient)
+    % ... (Your SVD setup remains the same) ...
     
-    % From the best approximation of Z (v1) we extract the RMS
-    Z1 = U(:,1)*S(1,1)*V(:,1)';
-    xs = Z1(:,1)*sx;
-    Jx = mean((x - xs).^2); 
-    rms_x_svd = sqrt(Jx);
+    % 1. WEIGHTED TLS EVALUATION (The "Honest" Solver)
+    % A. Whitening
+    Z_w = [x./sx, y./sy];
+    [U_w, S_w, V_w] = svd(Z_w, 0);
+    
+    % B. Slope Calculation (De-whitened)
+    v_min_w = V_w(:, end); % The singular vector for the smallest singular value
+    a_weighted = -v_min_w(1) / v_min_w(2) * (sy/sx);
+    b_weighted = my - a_weighted * mx;
+    
+    % C. Reconstruct the "Clean" Data (Rank-1 Approximation)
+    % This removes the noise component defined by the smallest singular value
+    Z_clean_w = U_w(:,1) * S_w(1,1) * V_w(:,1)'; 
+    
+    % D. Map back to Physical Space
+    x_fit_w = Z_clean_w(:,1) * sx; 
+    y_fit_w = Z_clean_w(:,2) * sy;
+    
+    % E. Calculate Residuals
+    dx_w = x - x_fit_w;
+    dy_w = y - y_fit_w;
+    
+    % --- THE CORRECT METRICS ---
+    % 1. Statistical Cost (Chi-Squared): Weighted TLS minimizes THIS.
+    cost_stat_w = mean( (dx_w./sx).^2 + (dy_w./sy).^2 ); 
+    
+    % 2. Geometric Cost (Euclidean): Weighted TLS ignores this.
+    cost_geom_w = mean( dx_w.^2 + dy_w.^2 );
 
-    % -- SVD not normalized calculation (just for comparison) --
-    Z = [x y];
-    [U,S,V] = svd(Z);
-    v2 = V(:,2);
-    as_SVD_not_whitened = -v2(1)/v2(2);
-    Z1 = U(:,1)*S(1,1)*V(:,1)';
-    xs = Z1(:,1);
-    Jx = mean((x - xs).^2); 
-    rms_x_svd_not_whitened = sqrt(Jx);
 
 
-    %%%%%%%%%%%%%%%%%%%% 5) Finalizing the results %%%%%%%%%%%%%%%%%%%%
-
-    % The slope 'a' is correct.
-    % Calculate 'b' (intercept) to map back to original coordinates.
-    % y = a*x + b  =>  mean_y = a*mean_x + b  =>  b = mean_y - a*mean_x
-    a_tls = as;
-    b_tls = my - a_tls * mx;
-
-    b_tls_not_whitened = my - as_SVD_not_whitened * mx;
+    % 2. UNWEIGHTED TLS EVALUATION (The "Overfitting" Solver)
+    % A. Raw Data (No Whitening)
+    Z_u = [x, y];
+    [U_u, S_u, V_u] = svd(Z_u, 0);
+    
+    % B. Slope
+    v_min_u = V_u(:, end);
+    a_unweighted = -v_min_u(1) / v_min_u(2); 
+    b_unweighted = my - a_unweighted * mx;
+    
+    % C. Reconstruction
+    Z_clean_u = U_u(:,1) * S_u(1,1) * V_u(:,1)';
+    x_fit_u = Z_clean_u(:,1);
+    y_fit_u = Z_clean_u(:,2);
+    
+    % D. Residuals
+    dx_u = x - x_fit_u;
+    dy_u = y - y_fit_u;
+    
+    % --- METRICS ---
+    % 1. Statistical Cost (Chi-Squared)
+    cost_stat_u = mean( (dx_u./sx).^2 + (dy_u./sy).^2 );
+    
+    % 2. Geometric Cost (Euclidean): Unweighted TLS minimizes THIS.
+    cost_geom_u = mean( dx_u.^2 + dy_u.^2 );
+    
+    % 3. FINAL COMPARISON PRINT
+    fprintf('\n--- METHOD COMPARISON (Lower is Better for its own domain) ---\n');
+    fprintf('1. STATISTICAL COST (Did we respect the noise sigma?)\n');
+    fprintf('   Weighted TLS:   %.7f  <-- Should be LOWER (Winner)\n', cost_stat_w);
+    fprintf('   Unweighted TLS: %.7f\n', cost_stat_u);
+    
+    fprintf('2. GEOMETRIC COST (Did we fit the point cloud shape?)\n');
+    fprintf('   Weighted TLS:   %.7f\n', cost_geom_w);
+    fprintf('   Unweighted TLS: %.7f  <-- Should be LOWER (Winner)\n', cost_geom_u);
+    
+    % If you have the true slope from your simulation (e.g., from an earlier variable 'true_a'):
+    if exist('use_data_r0_actual', 'var')
+        % Calculate local true slope (approximate)
+        % For demo purposes, let's assume you stored the true R0 mean for this block
+        r0_true_mean = mean(use_data_r0_actual( (block_idx-1)*N +1 : block_idx*N ));
+        % Note: Slope 'a' is dR0/dSOC. In your model, check if you have a variable for this.
+        % If not, just comparing stability is enough.
+    end
 
     %%%%%%%%%%%%%%%%%%%% 6) Data plotting %%%%%%%%%%%%%%%%%%%%
 
@@ -82,19 +133,19 @@ for block_idx = 1:N_blocks
     x_seg = use_data_soc_meas(idx_range);
 
     % Plot SVD (ok)
-    y_fit = a_tls * x_seg + b_tls;
-    plot(x_seg, y_fit, [colors(1)], 'LineWidth', 2, 'DisplayName', sprintf('Fit Block %d (a=%.4f)', block_idx, a_tls));
+    y_fit = a_weighted * x_seg + b_weighted;
+    plot(x_seg, y_fit, [colors(1)], 'LineWidth', 2, 'DisplayName', sprintf('Fit Block %d (a=%.4f)', block_idx, a_weighted));
     hold on;
 
     % Plot SVD (wrong one)
-    y_fit = as_SVD_not_whitened * x_seg + b_tls_not_whitened;
-    plot(x_seg, y_fit, [colors(1) '--'], 'LineWidth', 2, 'DisplayName', sprintf('Fit Block %d (a=%.4f)', block_idx, a_tls));
+    y_fit = a_unweighted * x_seg + b_unweighted;
+    plot(x_seg, y_fit, [colors(1) '--'], 'LineWidth', 2, 'DisplayName', sprintf('Fit Block %d (a=%.4f)', block_idx, a_unweighted));
     hold on;
     
     % Info printing
-    fprintf('Final TLS SVD Model: y = %.4fx + %.4f\n', a_tls, b_tls);
-    fprintf('RMS whitened:     %.4f\n',rms_x_svd);
-    fprintf('RMS not whitened: %.4f\n',rms_x_svd_not_whitened);
+    fprintf('Final TLS SVD Model: y = %.4fx + %.4f\n', a_unweighted, b_unweighted);
+    %fprintf('RMS whitened:     %.10f\n',rms_x_svd);
+    %fprintf('RMS not whitened: %.10f\n',rms_x_svd_not_whitened);
 
 end
 

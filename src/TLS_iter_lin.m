@@ -3,6 +3,12 @@ clear; clc; close all;
 % LOAD THE DATASET
 load("../res/dataset.mat")
 
+% Sort the data based on SOC, thus avoiding overlaps due to unordered data
+% ArrayA and capture the indices
+[use_data_soc_meas, sortIdx] = sort(use_data_soc_meas);
+% Apply the same indices to ArrayB
+use_data_r0_meas = use_data_r0_meas(sortIdx);
+
 % CONFIGURATION
 N_blocks = 3;
 sx = NOISE_STD_DEV_SOC; 
@@ -39,8 +45,7 @@ for block_idx = 1:N_blocks
     
     %%%%%%%%%%%%%%%%%%%% 3) Actual calculation %%%%%%%%%%%%%%%%%%%%
     
-    fprintf('Iter |  Slope (a)  | Residual Norm\n');
-    fprintf('-----------------------------------\n');
+    fprintf('     | Slope:    | Cost (Chi2) Desc) | Norm: (Incr)\n');
 
     % Construct weight coefficients matrix (std)
     si = diag([1/sx 1/sy]);
@@ -51,7 +56,7 @@ for block_idx = 1:N_blocks
     xs = x;         
     
     % Init
-    N_iter = 10; 
+    N_iter = 13; 
     as_log_block = zeros(N_iter, 1);
     bs_log_block = zeros(N_iter, 1);
     
@@ -85,8 +90,14 @@ for block_idx = 1:N_blocks
         as_log_block(iter) = as;
         bs_log_block(iter) = mean_y - as * mean_x;
         
-        res_norm_expl = sqrt(sum(delta_d.^2));
-        fprintf('%4d | % .6f | %.5f\n', iter, as, res_norm_expl);
+        % Calculate the COST FUNCTION properly
+        % This is what the math is actually minimizing:
+        weighted_sq_err = sum( (dx/sx).^2 + (dy/sy).^2 );
+        
+        % This is just for your curiosity (will likely go UP)
+        euclidean_norm = sqrt(sum(dx.^2 + dy.^2));
+    
+        fprintf('%4d | %.6f |  %.4f | %.4f \n', iter, as, weighted_sq_err, euclidean_norm);
         
     end
     
@@ -99,7 +110,7 @@ for block_idx = 1:N_blocks
     b_tls = mean_y - a_tls * mean_x;
 
     % Reconstruct the index for this block to plot the line segment only where data exists
-    idx_range = (block_idx-1)*N+1 : block_idx*N;
+    idx_range = (block_idx-1)*N +1 : block_idx*N;
     x_seg = use_data_soc_meas(idx_range);
 
     % Calculate y using y = ax + b (for every iteration)
