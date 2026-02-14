@@ -11,11 +11,15 @@ use_data_r0_meas = use_data_r0_meas(sortIdx);
 
 % CONFIGURATION
 N_blocks = 3;
+N_ranges = [0.35; 0.70; 1.0];
 sx = NOISE_STD_DEV_SOC; 
 sy = NOISE_STD_DEV_R0; 
 N = floor(length(use_data_soc_meas)/N_blocks);
+N_total = length(use_data_soc_meas);
 N_iter = 8;
 weighted_sq_err_history = zeros(N_blocks, N_iter);
+final_r0_approx_tls = [];
+final_r0_approx_ols = [];
 
 % PLOT INIT
 figure;
@@ -58,7 +62,10 @@ for block_idx = 1:N_blocks
     W = kron(si, eye(N));
     
     % Initial Guess using centered data
-    as = x \ y;     
+    a_ols = x \ y;
+    b_ols = mean_y - a_ols * mean_x;
+
+    as = a_ols;
     xs = x;         
     
     % Init
@@ -119,6 +126,9 @@ for block_idx = 1:N_blocks
     idx_range = (block_idx-1)*N +1 : block_idx*N;
     x_seg = use_data_soc_meas(idx_range);
 
+    % OLS for x block
+    final_r0_approx_ols = [final_r0_approx_ols; x_seg .* a_ols + b_ols];
+
     % Calculate y using y = ax + b (for every iteration)
     for i = 1:N_iter    
         y_fit = x_seg * as_log_block(i) + bs_log_block(i);
@@ -127,11 +137,13 @@ for block_idx = 1:N_blocks
     end    
 
     % Calculate and plot the final fit
-    y_fit = a_tls * x_seg + b_tls;
+    y_fit = x_seg.* a_tls + b_tls;
+    final_r0_approx_tls = [final_r0_approx_tls; y_fit];
     plot(x_seg, y_fit, [colors(2)], 'LineWidth', 2, 'DisplayName', sprintf('Final Fit %d (a=%.4f)', i, a_tls));  hold on;
     
     % Info printing
-    fprintf('Final TLS Model: y = %.4fx + %.4f\n', a_tls, b_tls);
+    fprintf('\nFinal    TLS Model: y = %.8fx + %.8f\n', a_tls, b_tls);
+    fprintf('Original OLS Model: y = %.8fx + %.8f\n', a_ols, b_ols);
 end
 
 % --- PLOTTING ---
@@ -151,3 +163,20 @@ for block_idx = 1:N_blocks
     plot(weighted_sq_err_history(block_idx,:)); hold on;
     title('Statistical residual over iterations');
 end
+
+final_r0_approx_tls = flip(final_r0_approx_tls);
+final_r0_approx_ols = flip(final_r0_approx_ols);
+
+figure
+plot(final_r0_approx_ols); hold on;
+plot(final_r0_approx_tls); hold on;
+plot(use_data_r0_true);
+legend show;
+
+final_diff_ols = sqrt(mean(use_data_r0_true(1:N*N_blocks) - final_r0_approx_ols).^2);
+final_diff_tls = sqrt(mean(use_data_r0_true(1:N*N_blocks) - final_r0_approx_tls).^2);
+
+
+fprintf("\n----------------------------------------------------------------------\n")
+fprintf("OLS mean residual: %.20f\n", final_diff_ols);
+fprintf("TLS mean residual: %.20f\n", final_diff_tls);

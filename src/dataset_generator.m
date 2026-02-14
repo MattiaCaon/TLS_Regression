@@ -66,9 +66,9 @@ data_i_meas = [];
 data_r0_meas = [];
 
 use_data_r0_meas = [];
-use_data_r0_actual = [];
+use_data_r0_true = [];
 use_data_soc_meas = [];
-use_data_soc_actual = [];
+use_data_soc_true = [];
 
 fprintf('Starting simulation with Noise Variance: %e (StdDev: %.4f V)\n', NOISE_VARIANCE_V, NOISE_STD_DEV_V);
 
@@ -121,10 +121,10 @@ while current_soc > 0
 
             % Save data that will be used for TLS
             use_data_r0_meas = [use_data_r0_meas; r0_meas];
-            use_data_r0_actual = [use_data_r0_actual; r0];
+            use_data_r0_true = [use_data_r0_true; r0];
 
             use_data_soc_meas = [use_data_soc_meas; current_soc_meas];
-            use_data_soc_actual = [use_data_soc_actual; current_soc_actual];
+            use_data_soc_true = [use_data_soc_true; current_soc_actual];
         end
 
         % Store Data
@@ -186,10 +186,10 @@ while current_soc > 0
 
             % Save data that will be used for TLS
             use_data_r0_meas = [use_data_r0_meas; r0_meas];
-            use_data_r0_actual = [use_data_r0_actual; r0];
+            use_data_r0_true = [use_data_r0_true; r0];
 
             use_data_soc_meas = [use_data_soc_meas; current_soc_meas];
-            use_data_soc_actual = [use_data_soc_actual; current_soc_actual];
+            use_data_soc_true = [use_data_soc_true; current_soc_actual];
         end
 
         % Store Data
@@ -286,11 +286,11 @@ end
 
 % Derivated std deviation
 
-diff_soc = use_data_soc_actual - use_data_soc_meas;
+diff_soc = use_data_soc_true - use_data_soc_meas;
 diff_squared_soc = diff_soc.^2;
 NOISE_STD_DEV_SOC = sqrt(mean(diff_squared_soc));
 
-diff_r0 = use_data_r0_actual - use_data_r0_meas;
+diff_r0 = use_data_r0_true - use_data_r0_meas;
 diff_squared_r0 = diff_r0.^2;
 NOISE_STD_DEV_R0 = sqrt(mean(diff_squared_r0));
 
@@ -298,4 +298,4 @@ figure
 plot(diff_soc, 'b--');
 
 
-save("../res/dataset.mat", "use_data_r0_meas", "use_data_soc_meas", "NOISE_STD_DEV_V", "NOISE_STD_DEV_I", "NOISE_STD_DEV_SOC", "NOISE_STD_DEV_R0")
+save("../res/dataset.mat", "use_data_r0_meas", "use_data_soc_meas", "NOISE_STD_DEV_V", "NOISE_STD_DEV_I", "NOISE_STD_DEV_SOC", "NOISE_STD_DEV_R0", "use_data_r0_true")

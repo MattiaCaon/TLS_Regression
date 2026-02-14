@@ -148,5 +148,5 @@ plot(use_data_soc_meas, use_data_r0_meas, 'ko', 'DisplayName', 'Data', 'MarkerFa
 
 % Finishing up the plot
 legend show;
-title('TLS Fitting with Intercept Correction');
+title('TLS Fitting with with SVD method');
 xlabel('SOC'); ylabel('R0');
