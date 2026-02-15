@@ -294,7 +294,8 @@ diff_r0 = use_data_r0_true - use_data_r0_meas;
 diff_squared_r0 = diff_r0.^2;
 NOISE_STD_DEV_R0 = sqrt(mean(diff_squared_r0));
 
-figure
+
+figure('Position', [100, 200, 1000, 800]);
 plot(diff_soc, 'b--');
 
 

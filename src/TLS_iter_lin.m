@@ -5,10 +5,10 @@ load("../res/dataset.mat")
 
 % Sort the data based on SOC, thus avoiding overlaps due to unordered data
 % ArrayA and capture the indices
-[use_data_soc_meas, sortIdx] = sort(use_data_soc_meas);
+%[use_data_soc_meas, sortIdx] = sort(use_data_soc_meas);
 
 % Apply the same indices to ArrayB
-use_data_r0_meas = use_data_r0_meas(sortIdx);
+%use_data_r0_meas = use_data_r0_meas(sortIdx);
 
 %use_data_r0_true = flip(use_data_r0_true);
 %use_data_soc_true = flip(use_data_soc_true);
@@ -16,18 +16,19 @@ use_data_r0_meas = use_data_r0_meas(sortIdx);
 
 % CONFIGURATION
 N_blocks = 3;
-N_range = [0; 0.20; 0.77; 1.0];
+N_range = [0; 0.28; 0.80; 1.0];
 sx = NOISE_STD_DEV_SOC; 
 sy = NOISE_STD_DEV_R0; 
 N = floor(length(use_data_soc_meas)/N_blocks);
 N_total = length(use_data_soc_meas);
-N_iter = 8;
+N_iter = 12;
 weighted_sq_err_history = zeros(N_blocks, N_iter);
 final_r0_approx_tls = [];
 final_r0_approx_ols = [];
+final_r0_approx_true = [];
 
 % PLOT INIT
-figure;
+figure('Position', [100, 400, 1000, 800]);
 grid on;
 colors = ['r', 'g', 'b'];
 
@@ -46,7 +47,11 @@ for block_idx = 1:N_blocks
     N = length(current_range);
 
     x_raw = use_data_soc_meas(current_range);
-    y_raw = use_data_r0_meas(current_range); 
+    y_raw = use_data_r0_meas(current_range);
+
+    %-- true estimation
+    x_raw_true = use_data_soc_true(current_range);
+    y_raw_true = use_data_r0_true(current_range);
     
 
      %%%%%%%%%%%%%%%%%%%%% 2) Mean centering %%%%%%%%%%%%%%%%%%%%
@@ -55,9 +60,14 @@ for block_idx = 1:N_blocks
     % This allows y=ax solver to find the correct slope.
     mean_x = mean(x_raw);
     mean_y = mean(y_raw);
-    
     x = x_raw - mean_x;
     y = y_raw - mean_y;
+
+    %-- true estimation
+    mean_x_true = mean(x_raw_true);
+    mean_y_true = mean(y_raw_true);
+    x_true = x_raw_true - mean_x_true;
+    y_true = y_raw_true - mean_y_true;
 
     
     %%%%%%%%%%%%%%%%%%%% 3) Actual calculation %%%%%%%%%%%%%%%%%%%%
@@ -73,15 +83,21 @@ for block_idx = 1:N_blocks
     a_ols = x \ y;
     b_ols = mean_y - a_ols * mean_x;
 
+    %-- true estimation
+    a_true = x_true \ y_true;
+    b_true = mean_y_true - a_true * mean_x_true;
+    final_r0_approx_true = [final_r0_approx_true; a_true * x_raw_true + b_true];
+
+
+    %%%%%%%%%%%%%%%%%%%% 3) Iterative process %%%%%%%%%%%%%%%%%%%%
+
+    % Init
     as = a_ols;
     xs = x;
-    
-    % Init
     as_log_block = zeros(N_iter, 1);
     bs_log_block = zeros(N_iter, 1);
     
-
-    %%%%%%%%%%%%%%%%%%%% 3) Iterative process %%%%%%%%%%%%%%%%%%%%
+    % Loop
     for iter = 1:N_iter
 
         % Obtain array of residuals
@@ -132,56 +148,63 @@ for block_idx = 1:N_blocks
 
     % Reconstruct the index for this block to plot the line segment only where data exists
     idx_range = floor(N_range(block_idx)*N_total)+1 : floor(N_range(block_idx+1)*N_total);
-    x_seg = use_data_soc_meas(idx_range);
-
-    % OLS for x block
-    final_r0_approx_ols = [final_r0_approx_ols; x_seg .* a_ols + b_ols];
+    x_seg_meas = use_data_soc_meas(idx_range);
+    x_seg_true = use_data_soc_true(idx_range);
 
     % Calculate y using y = ax + b (for every iteration)
     for i = 1:N_iter    
-        y_fit = x_seg * as_log_block(i) + bs_log_block(i);
-        plot(x_seg, y_fit, [colors(1) '--'], 'LineWidth', 2, 'DisplayName', sprintf('Fit Block %d (a=%.4f)', block_idx, as_log_block(i)));
+        y_fit = x_seg_meas * as_log_block(i) + bs_log_block(i);
+        plot(x_seg_meas, y_fit, [colors(1) '--'], 'LineWidth', 2, 'DisplayName', sprintf('Fit Block %d (a=%.4f)', block_idx, as_log_block(i)));
         hold on;
     end    
 
     % Calculate and plot the final fit
-    y_fit = x_seg.* a_tls + b_tls;
-    final_r0_approx_tls = [final_r0_approx_tls; y_fit];
-    plot(x_seg, y_fit, [colors(2)], 'LineWidth', 2, 'DisplayName', sprintf('Final Fit %d (a=%.4f)', i, a_tls));  hold on;
+    y_fit = x_seg_meas * a_tls + b_tls;
+    plot(x_seg_meas, y_fit, [colors(2)], 'LineWidth', 2, 'DisplayName', sprintf('Final Fit %d (a=%.4f)', i, a_tls));  hold on;
+    
+    % For final comparison graph
+    final_r0_approx_ols = [final_r0_approx_ols; x_seg_true * a_ols + b_ols];
+    final_r0_approx_tls = [final_r0_approx_tls; x_seg_true * a_tls + b_tls];
     
     % Info printing
     fprintf('\nFinal    TLS Model: y = %.8fx + %.8f\n', a_tls, b_tls);
     fprintf('Original OLS Model: y = %.8fx + %.8f\n', a_ols, b_ols);
 end
 
-% --- PLOTTING ---
+
+%%%%%%%%%%%%%%%%%%%% 6) Plotting comparisons %%%%%%%%%%%%%%%%%%%%
 
 % Plot data points
-plot(use_data_soc_meas, use_data_r0_meas, 'ko', 'DisplayName', 'Data', 'MarkerFaceColor', 'k', 'MarkerSize', 3); 
-
-% Finishing up the plot
+plot(use_data_soc_meas, use_data_r0_meas, 'ko', 'DisplayName', 'Data', 'MarkerFaceColor', 'k', 'MarkerSize', 3); hold on;
 ylim([0 0.100])
 legend show;
-title('TLS Fitting with Intercept Correction');
+title('TLS Fitting with iterative approach');
 xlabel('SOC'); ylabel('R0');
 
-% Residual decrease
-figure
+% Plot residual decrease for each block
+figure('Position', [100, 500, 1000, 800]);
+ax = zeros(N_blocks, 1);
 for block_idx = 1:N_blocks
-    plot(weighted_sq_err_history(block_idx,:)); hold on;
+    ax(block_idx) = subplot(3, 1, block_idx);
+    plot(weighted_sq_err_history(block_idx,:), 'DisplayName', sprintf('Block %d', block_idx)); hold on;
     title('Statistical residual over iterations');
+    legend show;
 end
+linkaxes(ax, 'x');
 
-figure
-plot(use_data_soc_meas, final_r0_approx_ols, 'DisplayName', 'OLS'); hold on;
-plot(use_data_soc_meas, final_r0_approx_tls, 'DisplayName', 'TLS'); hold on;
-plot(use_data_soc_true, use_data_r0_true, 'DisplayName', 'TRUE');
+% Plot all interpolation approachs comparing them with the true best linear approximations
+figure('Position', [100, 600, 1000, 800]);
+
+plot(use_data_soc_true, final_r0_approx_ols, 'DisplayName', 'OLS'); hold on;
+plot(use_data_soc_true, final_r0_approx_tls, 'DisplayName', 'TLS'); hold on;
+plot(use_data_soc_true, use_data_r0_true, 'DisplayName', 'REAL'); hold on;
+plot(use_data_soc_true, final_r0_approx_true, 'DisplayName', 'TRUE_Approx'); hold on;
 legend show;
 
-final_diff_ols = sqrt(mean(use_data_r0_true(1:N_total) - final_r0_approx_ols).^2);
-final_diff_tls = sqrt(mean(use_data_r0_true(1:N_total) - final_r0_approx_tls).^2);
-
+% Residuals calculation from the true best interpolation
+final_diff_ols = sqrt(mean(final_r0_approx_true(1:N_total) - final_r0_approx_ols).^2);
+final_diff_tls = sqrt(mean(final_r0_approx_true(1:N_total) - final_r0_approx_tls).^2);
 
 fprintf("\n----------------------------------------------------------------------\n")
-fprintf("OLS mean residual: %.20f\n", final_diff_ols);
-fprintf("TLS mean residual: %.20f\n", final_diff_tls);
+fprintf("OLS mean residual: %.10f\n", final_diff_ols);
+fprintf("TLS mean residual: %.10f\n", final_diff_tls);
