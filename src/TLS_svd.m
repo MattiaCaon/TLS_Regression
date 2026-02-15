@@ -5,9 +5,9 @@ load("../res/dataset.mat")
 
 % Sort the data based on SOC, thus avoiding overlaps due to unordered data
 % ArrayA and capture the indices
-[use_data_soc_meas, sortIdx] = sort(use_data_soc_meas);
+%[use_data_soc_meas, sortIdx] = sort(use_data_soc_meas);
 % Apply the same indices to ArrayB
-use_data_r0_meas = use_data_r0_meas(sortIdx);
+%use_data_r0_meas = use_data_r0_meas(sortIdx);
 
 % CONFIGURATION
 N_blocks = 3;

@@ -3,25 +3,14 @@ clear; clc; close all;
 % LOAD THE DATASET
 load("../res/dataset.mat")
 
-% Sort the data based on SOC, thus avoiding overlaps due to unordered data
-% ArrayA and capture the indices
-%[use_data_soc_meas, sortIdx] = sort(use_data_soc_meas);
-
-% Apply the same indices to ArrayB
-%use_data_r0_meas = use_data_r0_meas(sortIdx);
-
-%use_data_r0_true = flip(use_data_r0_true);
-%use_data_soc_true = flip(use_data_soc_true);
-
-
 % CONFIGURATION
-N_blocks = 3;
-N_range = [0; 0.28; 0.80; 1.0];
+RANGES = [0; 0.28; 0.78; 1.0];
+N_blocks = length(RANGES)-1;
 sx = NOISE_STD_DEV_SOC; 
 sy = NOISE_STD_DEV_R0; 
 N = floor(length(use_data_soc_meas)/N_blocks);
 N_total = length(use_data_soc_meas);
-N_iter = 12;
+N_iter = 10;
 weighted_sq_err_history = zeros(N_blocks, N_iter);
 final_r0_approx_tls = [];
 final_r0_approx_ols = [];
@@ -43,7 +32,7 @@ for block_idx = 1:N_blocks
     %%%%%%%%%%%%%%%%%%%% 1) Get raw data partion %%%%%%%%%%%%%%%%%%%%
 
     % Partitionate data
-    current_range = floor(N_range(block_idx)*N_total)+1 : floor(N_range(block_idx+1)*N_total);
+    current_range = floor(RANGES(block_idx)*N_total)+1 : floor(RANGES(block_idx+1)*N_total);
     N = length(current_range);
 
     x_raw = use_data_soc_meas(current_range);
@@ -147,7 +136,7 @@ for block_idx = 1:N_blocks
     b_tls = mean_y - a_tls * mean_x;
 
     % Reconstruct the index for this block to plot the line segment only where data exists
-    idx_range = floor(N_range(block_idx)*N_total)+1 : floor(N_range(block_idx+1)*N_total);
+    idx_range = floor(RANGES(block_idx)*N_total)+1 : floor(RANGES(block_idx+1)*N_total);
     x_seg_meas = use_data_soc_meas(idx_range);
     x_seg_true = use_data_soc_true(idx_range);
 
@@ -202,8 +191,8 @@ plot(use_data_soc_true, final_r0_approx_true, 'DisplayName', 'TRUE_Approx'); hol
 legend show;
 
 % Residuals calculation from the true best interpolation
-final_diff_ols = sqrt(mean(final_r0_approx_true(1:N_total) - final_r0_approx_ols).^2);
-final_diff_tls = sqrt(mean(final_r0_approx_true(1:N_total) - final_r0_approx_tls).^2);
+final_diff_ols = sqrt(mean((final_r0_approx_true(1:N_total) - final_r0_approx_ols).^2));
+final_diff_tls = sqrt(mean((final_r0_approx_true(1:N_total) - final_r0_approx_tls).^2));
 
 fprintf("\n----------------------------------------------------------------------\n")
 fprintf("OLS mean residual: %.10f\n", final_diff_ols);
