@@ -53,16 +53,16 @@ for block_idx = 1:N_blocks
 
     % Shift the data so its center is at (0,0).
     % This allows y=ax solver to find the correct slope.
-    mean_x = mean(x_raw);
-    mean_y = mean(y_raw);
-    x = x_raw - mean_x;
-    y = y_raw - mean_y;
+    x_mean = mean(x_raw);
+    y_mean = mean(y_raw);
+    x = x_raw - x_mean;
+    y = y_raw - y_mean;
 
     % True estimation (no x noise)
-    mean_x_true = mean(x_raw_true);
-    mean_y_true = mean(y_raw_true);
-    x_true = x_raw_true - mean_x_true;
-    y_true = y_raw_true - mean_y_true;
+    x_true_mean = mean(x_raw_true);
+    y_true_mean = mean(y_raw_true);
+    x_true = x_raw_true - x_true_mean;
+    y_true = y_raw_true - y_true_mean;
 
     
     %%%%%%%%%%%%%%%%%%%% 3) Actual calculation %%%%%%%%%%%%%%%%%%%%
@@ -72,14 +72,14 @@ for block_idx = 1:N_blocks
 
     % Initial guess using centered data
     a_ols = x \ y;
-    b_ols = mean_y - a_ols * mean_x;
+    b_ols = y_mean - a_ols * x_mean;
     %--save
     a_ols_blocks(block_idx) = a_ols;
     b_ols_blocks(block_idx) = b_ols;
 
     % True estimation
     a_true = x_true \ y_true;
-    b_true = mean_y_true - a_true * mean_x_true;
+    b_true = y_true_mean - a_true * x_true_mean;
     %--save
     a_true_blocks(block_idx) = a_true;
     b_true_blocks(block_idx) = b_true;
@@ -125,7 +125,7 @@ for block_idx = 1:N_blocks
 
         % Update history of a_tls for iteration visualization
         as_log_block(iter) = as;
-        bs_log_block(iter) = mean_y - as * mean_x;
+        bs_log_block(iter) = y_mean - as * x_mean;
         
         % This is what the math is actually minimizing:
         weighted_sq_err = mean( (dx/s_x).^2 + (dy/s_y).^2 );
@@ -144,7 +144,7 @@ for block_idx = 1:N_blocks
     % Calculate 'b' (intercept) to map back to original coordinates.
     % y = a*x + b  =>  mean_y = a*mean_x + b  =>  b = mean_y - a*mean_x
     a_tls = as;
-    b_tls = mean_y - a_tls * mean_x;
+    b_tls = y_mean - a_tls * x_mean;
     %--save
     a_tls_blocks(block_idx) = a_tls;
     b_tls_blocks(block_idx) = b_tls;
@@ -178,8 +178,9 @@ end
 plot(use_data_soc_meas, use_data_r0_meas, 'ko', 'DisplayName', 'Data', 'MarkerFaceColor', 'k', 'MarkerSize', 3); hold on;
 ylim([0 0.100])
 legend show;
-title('TLS Fitting with iterative approach');
-xlabel('SOC'); ylabel('R0');
+title('TLS fitting with iterative approach');
+ylabel('R0 [Ohm]');
+xlabel('SOC [%]');
 
 
 %%%%%%%%%%%%%%%%%%%% 6) Plotting residuals over iterations %%%%%%%%%%%%%%%%%%%%
@@ -194,6 +195,8 @@ for block_idx = 1:N_blocks
     legend show;
 end
 linkaxes(ax, 'x');
+ylabel('RMS');
+xlabel('Iteration');
 
 
 
@@ -225,29 +228,36 @@ plot(use_data_soc_true, R0_approx_tls_simple, DisplayName='TLS simple', Color='#
 plot(use_data_soc_true, R0_approx_tls_adv,    DisplayName='TLS adv',    Color='#00F000', LineStyle='-',  LineWidth=1); hold on;
 
 legend show;
+ylabel('R0 [Ohm]');
+xlabel('SOC [%]');
 
 
 %%%%%%%%%%%%%%%%%%%% 7) Final results %%%%%%%%%%%%%%%%%%%%
+fprintf("\n----------------------------------------------------------------------\n")
+fprintf("\nFINAL COMPARISON")
+fprintf("\n----------------------------------------------------------------------\n")
+
 
 % Residuals calculation from the true best interpolation
+
+fprintf("SIMPLE\n")
 final_diff_ols = sqrt(mean((R0_approx_true_simple(1:N_total) - R0_approx_ols_simple).^2));
 final_diff_tls = sqrt(mean((R0_approx_true_simple(1:N_total) - R0_approx_tls_simple).^2));
-delta = abs(final_diff_ols - final_diff_tls);
-
-fprintf("\n----------------------------------------------------------------------SIMPLE\n")
+delta = (final_diff_ols - final_diff_tls);
 
 fprintf("OLS mean residual: %.10f\n", final_diff_ols);
 fprintf("TLS mean residual: %.10f\n", final_diff_tls);
 fprintf("Delta in approaches: %.10f\n", delta);
-fprintf("Variation %%: %.3f", (delta/final_diff_ols) * 100.0)
+fprintf("Improvements: %.3f%%", (delta/final_diff_ols) * 100.0)
 
-fprintf("\n----------------------------------------------------------------------ADV\n")
+fprintf("\n----------------------------------------------------------------------\n")
 
+fprintf("ADVANCED\n")
 final_diff_ols = sqrt(mean((R0_approx_true_adv(1:N_total) - R0_approx_ols_adv).^2));
 final_diff_tls = sqrt(mean((R0_approx_true_adv(1:N_total) - R0_approx_tls_adv).^2));
-delta = abs(final_diff_ols - final_diff_tls);
+delta = (final_diff_ols - final_diff_tls);
 
 fprintf("OLS mean residual: %.10f\n", final_diff_ols);
 fprintf("TLS mean residual: %.10f\n", final_diff_tls);
 fprintf("Delta in approaches: %.10f\n", delta);
-fprintf("Variation %%: %.3f\n\n", (delta/final_diff_ols) * 100.0)
+fprintf("Improvements: %.3f%%\n\n", (delta/final_diff_ols) * 100.0)
