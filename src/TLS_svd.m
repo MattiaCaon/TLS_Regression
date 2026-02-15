@@ -157,11 +157,11 @@ for block_idx = 1:N_blocks
 
     % Plot SVD (ok)
     y_fit = a_weighted * x_seg + b_weighted;
-    plot(x_seg, y_fit, [colors(2)], LineWidth=2, DisplayName=sprintf('Fit Block %d (a=%.4f)', block_idx, a_weighted)); hold on;
+    plot(x_seg, y_fit, [colors(2)], LineWidth=2, DisplayName=sprintf('Block %d: WHITENED(a=%.6f)', block_idx, a_weighted)); hold on;
 
     % Plot SVD (wrong one)
     y_fit = a_unweighted * x_seg + b_unweighted;
-    plot(x_seg, y_fit, [colors(1) '--'], LineWidth=2, DisplayName=sprintf('Fit Block %d (a=%.4f)', block_idx, a_unweighted)); hold on;
+    plot(x_seg, y_fit, [colors(1) '--'], LineWidth=2, DisplayName=sprintf('Block %d UNWHITENED (a=%.6f)', block_idx, a_unweighted)); hold on;
     
     % Info printing
     fprintf('Final svd_w SVD Model: y = %.4fx + %.4f\n', a_unweighted, b_unweighted);
@@ -176,9 +176,6 @@ legend show;
 title('TLS fitting with with SVD method');
 ylabel('R0 [Ohm]');
 xlabel('SOC [%]');
-
-
-
 
 % Plot all interpolation approachs comparing them with the true best linear approximations
 figure('Position', [100, 600, 1000, 800]);

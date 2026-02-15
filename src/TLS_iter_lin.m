@@ -190,7 +190,7 @@ figure('Position', [100, 500, 1000, 800]);
 ax = zeros(N_blocks, 1);
 for block_idx = 1:N_blocks
     ax(block_idx) = subplot(N_blocks, 1, block_idx);
-    plot(weighted_sq_err_history(block_idx,:), 'DisplayName', sprintf('Block %d', block_idx)); hold on;
+    plot(weighted_sq_err_history(block_idx,:),LineWidth=0.5, DisplayName=sprintf('Block %d', block_idx)); hold on;
     title('Statistical residual over iterations');
     legend show;
 end
