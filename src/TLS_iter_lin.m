@@ -174,9 +174,6 @@ for block_idx = 1:N_blocks
     
 end
 
-
-%%%%%%%%%%%%%%%%%%%% 6) Plotting residuals over iterations %%%%%%%%%%%%%%%%%%%%
-
 % Plot data points
 plot(use_data_soc_meas, use_data_r0_meas, 'ko', 'DisplayName', 'Data', 'MarkerFaceColor', 'k', 'MarkerSize', 3); hold on;
 ylim([0 0.100])
@@ -184,11 +181,14 @@ legend show;
 title('TLS Fitting with iterative approach');
 xlabel('SOC'); ylabel('R0');
 
+
+%%%%%%%%%%%%%%%%%%%% 6) Plotting residuals over iterations %%%%%%%%%%%%%%%%%%%%
+
 % Plot residual decrease for each block
 figure('Position', [100, 500, 1000, 800]);
 ax = zeros(N_blocks, 1);
 for block_idx = 1:N_blocks
-    ax(block_idx) = subplot(3, 1, block_idx);
+    ax(block_idx) = subplot(N_blocks, 1, block_idx);
     plot(weighted_sq_err_history(block_idx,:), 'DisplayName', sprintf('Block %d', block_idx)); hold on;
     title('Statistical residual over iterations');
     legend show;
@@ -234,14 +234,14 @@ final_diff_ols = sqrt(mean((R0_approx_true_simple(1:N_total) - R0_approx_ols_sim
 final_diff_tls = sqrt(mean((R0_approx_true_simple(1:N_total) - R0_approx_tls_simple).^2));
 delta = abs(final_diff_ols - final_diff_tls);
 
-fprintf("\n----------------------------------------------------------------------\n")
+fprintf("\n----------------------------------------------------------------------SIMPLE\n")
 
 fprintf("OLS mean residual: %.10f\n", final_diff_ols);
 fprintf("TLS mean residual: %.10f\n", final_diff_tls);
 fprintf("Delta in approaches: %.10f\n", delta);
 fprintf("Variation %%: %.3f", (delta/final_diff_ols) * 100.0)
 
-fprintf("\n----------------------------------------------------------------------\n")
+fprintf("\n----------------------------------------------------------------------ADV\n")
 
 final_diff_ols = sqrt(mean((R0_approx_true_adv(1:N_total) - R0_approx_ols_adv).^2));
 final_diff_tls = sqrt(mean((R0_approx_true_adv(1:N_total) - R0_approx_tls_adv).^2));

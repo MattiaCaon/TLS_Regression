@@ -3,24 +3,17 @@ clear; clc; close all;
 % LOAD THE DATASET
 load("../res/dataset.mat")
 
-% Sort the data based on SOC, thus avoiding overlaps due to unordered data
-% ArrayA and capture the indices
-%[use_data_soc_meas, sortIdx] = sort(use_data_soc_meas);
-% Apply the same indices to ArrayB
-%use_data_r0_meas = use_data_r0_meas(sortIdx);
-
 % CONFIGURATION
 N_blocks = 3;
-sx = NOISE_STD_DEV_SOC; 
-sy = NOISE_STD_DEV_R0; 
+s_x = NOISE_STD_DEV_SOC; 
+s_y = NOISE_STD_DEV_R0; 
 N = floor(length(use_data_soc_meas)/N_blocks); % Data for each block
 
-fprintf('\nDataset data:\n\tstd_dev_x: %.8f\n\tstd_dev_y: %.8f', sx, sy);
-
-
+fprintf('\nDataset data:\n\tstd_dev_x: %.8f\n', s_x);
+fprintf('\nDataset data:\n\tstd_dev_y: %.8f\n', s_y);
 
 % PLOT INIT
-figure;
+figure('Position', [100, 600, 1000, 800]);
 grid on;
 colors = ['r', 'g', 'b'];
 
@@ -52,12 +45,12 @@ for block_idx = 1:N_blocks
     
     % 1. WEIGHTED TLS EVALUATION (The "Honest" Solver)
     % A. Whitening
-    Z_w = [x./sx, y./sy];
+    Z_w = [x./s_x, y./s_y];
     [U_w, S_w, V_w] = svd(Z_w, 0);
     
     % B. Slope Calculation (De-whitened)
     v_min_w = V_w(:, end); % The singular vector for the smallest singular value
-    a_weighted = -v_min_w(1) / v_min_w(2) * (sy/sx);
+    a_weighted = -v_min_w(1) / v_min_w(2) * (s_y/s_x);
     b_weighted = my - a_weighted * mx;
     
     % C. Reconstruct the "Clean" Data (Rank-1 Approximation)
@@ -65,8 +58,8 @@ for block_idx = 1:N_blocks
     Z_clean_w = U_w(:,1) * S_w(1,1) * V_w(:,1)'; 
     
     % D. Map back to Physical Space
-    x_fit_w = Z_clean_w(:,1) * sx; 
-    y_fit_w = Z_clean_w(:,2) * sy;
+    x_fit_w = Z_clean_w(:,1) * s_x; 
+    y_fit_w = Z_clean_w(:,2) * s_y;
     
     % E. Calculate Residuals
     dx_w = x - x_fit_w;
@@ -74,50 +67,48 @@ for block_idx = 1:N_blocks
     
     % --- METRICS ---
     % 1. Statistical Cost (Chi-Squared): Weighted TLS minimizes this.
-    cost_stat_w = mean( (dx_w./sx).^2 + (dy_w./sy).^2 ); 
+    cost_stat_w = mean( (dx_w./s_x).^2 + (dy_w./s_y).^2 ); 
     
     % 2. Geometric Cost (Euclidean): Weighted TLS ignores this.
     cost_geom_w = mean( dx_w.^2 + dy_w.^2 );
 
 
 
-    % 2. UNWEIGHTED TLS EVALUATION (The "Overfitting" Solver)
-    % A. Raw Data
+    % 2. UNWEIGHTED TLS EVALUATION
+    % Raw Data
     Z_u = [x, y];
     [U_u, S_u, V_u] = svd(Z_u, 0);
     
-    % B. Slope
+    % Slope
     v_min_u = V_u(:, end);
     a_unweighted = -v_min_u(1) / v_min_u(2); 
     b_unweighted = my - a_unweighted * mx;
     
-    % C. Reconstruction
+    % Reconstruction
     Z_clean_u = U_u(:,1) * S_u(1,1) * V_u(:,1)';
     x_fit_u = Z_clean_u(:,1);
     y_fit_u = Z_clean_u(:,2);
     
-    % D. Residuals
+    % Residuals
     dx_u = x - x_fit_u;
     dy_u = y - y_fit_u;
     
     % --- METRICS ---
-    % 1. Statistical Cost (Chi-Squared)
-    cost_stat_u = mean( (dx_u./sx).^2 + (dy_u./sy).^2 );
+    % Statistical Cost (Chi-Squared)
+    cost_stat_u = mean( (dx_u./s_x).^2 + (dy_u./s_y).^2 );
     
-    % 2. Geometric Cost (Euclidean): Unweighted TLS minimizes this.
+    % Geometric Cost (Euclidean): Unweighted TLS minimizes this.
     cost_geom_u = mean( dx_u.^2 + dy_u.^2 );
     
-    % 3. FINAL COMPARISON PRINT
+    % --- FINAL COMPARISON PRINT ---
     fprintf('1. STATISTICAL COST \n');
-    fprintf('%s\n', repmat('-', 1, 46));
-    fprintf('   Weighted TLS:   %.7f\n', cost_stat_w);
-    fprintf('   Unweighted TLS: %.7f\n', cost_stat_u);
+    fprintf('\t Weighted TLS:   %.7f\n', cost_stat_w);
+    fprintf('\t Unweighted TLS: %.7f\n', cost_stat_u);
     
     fprintf('%s\n', repmat('-', 1, 46));
     fprintf('2. GEOMETRIC COST\n');
-    fprintf('%s\n', repmat('-', 1, 46));
-    fprintf('   Weighted TLS:   %.7f\n', cost_geom_w);
-    fprintf('   Unweighted TLS: %.7f\n', cost_geom_u);
+    fprintf('\t Weighted TLS:   %.7f\n', cost_geom_w);
+    fprintf('\t Unweighted TLS: %.7f\n', cost_geom_u);
     
 
     %%%%%%%%%%%%%%%%%%%% 6) Data plotting %%%%%%%%%%%%%%%%%%%%
@@ -128,18 +119,14 @@ for block_idx = 1:N_blocks
 
     % Plot SVD (ok)
     y_fit = a_weighted * x_seg + b_weighted;
-    plot(x_seg, y_fit, [colors(2)], 'LineWidth', 2, 'DisplayName', sprintf('Fit Block %d (a=%.4f)', block_idx, a_weighted));
-    hold on;
+    plot(x_seg, y_fit, [colors(2)], LineWidth=2, DisplayName=sprintf('Fit Block %d (a=%.4f)', block_idx, a_weighted)); hold on;
 
     % Plot SVD (wrong one)
     y_fit = a_unweighted * x_seg + b_unweighted;
-    plot(x_seg, y_fit, [colors(1) '--'], 'LineWidth', 2, 'DisplayName', sprintf('Fit Block %d (a=%.4f)', block_idx, a_unweighted));
-    hold on;
+    plot(x_seg, y_fit, [colors(1) '--'], LineWidth=2, DisplayName=sprintf('Fit Block %d (a=%.4f)', block_idx, a_unweighted)); hold on;
     
     % Info printing
     fprintf('Final TLS SVD Model: y = %.4fx + %.4f\n', a_unweighted, b_unweighted);
-    %fprintf('RMS whitened:     %.10f\n',rms_x_svd);
-    %fprintf('RMS not whitened: %.10f\n',rms_x_svd_not_whitened);
 
 end
 
