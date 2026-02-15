@@ -38,8 +38,8 @@ r0_val_y = [0.080, 0.048, 0.028, 0.020, 0.032, 0.025, 0.020]; % Ohm
 
 % Polynomial Fit (Degree 5)
 % MATLAB returns coefficients [p1, p2... pn], similar to numpy
-poly_coeffs_ocv = polyfit(soc_meas, ocv_meas, 5);
-poly_coeffs_r0 = polyfit(r0_soc_x, r0_val_y, 5);
+poly_coeffs_ocv = polyfit(soc_meas, ocv_meas, 4);
+poly_coeffs_r0 = polyfit(r0_soc_x, r0_val_y, 4);
 
 % ==========================================
 % 3. SIMULATION ENGINE
@@ -298,4 +298,4 @@ figure
 plot(diff_soc, 'b--');
 
 
-save("../res/dataset.mat", "use_data_r0_meas", "use_data_soc_meas", "NOISE_STD_DEV_V", "NOISE_STD_DEV_I", "NOISE_STD_DEV_SOC", "NOISE_STD_DEV_R0", "use_data_r0_true")
+save("../res/dataset.mat", "use_data_r0_meas", "use_data_soc_meas", "NOISE_STD_DEV_V", "NOISE_STD_DEV_I", "NOISE_STD_DEV_SOC", "NOISE_STD_DEV_R0", "use_data_r0_true", "use_data_soc_true")

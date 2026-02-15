@@ -6,12 +6,17 @@ load("../res/dataset.mat")
 % Sort the data based on SOC, thus avoiding overlaps due to unordered data
 % ArrayA and capture the indices
 [use_data_soc_meas, sortIdx] = sort(use_data_soc_meas);
+
 % Apply the same indices to ArrayB
 use_data_r0_meas = use_data_r0_meas(sortIdx);
 
+%use_data_r0_true = flip(use_data_r0_true);
+%use_data_soc_true = flip(use_data_soc_true);
+
+
 % CONFIGURATION
 N_blocks = 3;
-N_ranges = [0.35; 0.70; 1.0];
+N_range = [0; 0.20; 0.77; 1.0];
 sx = NOISE_STD_DEV_SOC; 
 sy = NOISE_STD_DEV_R0; 
 N = floor(length(use_data_soc_meas)/N_blocks);
@@ -37,8 +42,11 @@ for block_idx = 1:N_blocks
     %%%%%%%%%%%%%%%%%%%% 1) Get raw data partion %%%%%%%%%%%%%%%%%%%%
 
     % Partitionate data
-    x_raw = use_data_soc_meas( (block_idx-1)*N +1 : block_idx*N );
-    y_raw = use_data_r0_meas( (block_idx-1)*N +1 : block_idx*N ); 
+    current_range = floor(N_range(block_idx)*N_total)+1 : floor(N_range(block_idx+1)*N_total);
+    N = length(current_range);
+
+    x_raw = use_data_soc_meas(current_range);
+    y_raw = use_data_r0_meas(current_range); 
     
 
      %%%%%%%%%%%%%%%%%%%%% 2) Mean centering %%%%%%%%%%%%%%%%%%%%
@@ -66,7 +74,7 @@ for block_idx = 1:N_blocks
     b_ols = mean_y - a_ols * mean_x;
 
     as = a_ols;
-    xs = x;         
+    xs = x;
     
     % Init
     as_log_block = zeros(N_iter, 1);
@@ -123,7 +131,7 @@ for block_idx = 1:N_blocks
     b_tls = mean_y - a_tls * mean_x;
 
     % Reconstruct the index for this block to plot the line segment only where data exists
-    idx_range = (block_idx-1)*N +1 : block_idx*N;
+    idx_range = floor(N_range(block_idx)*N_total)+1 : floor(N_range(block_idx+1)*N_total);
     x_seg = use_data_soc_meas(idx_range);
 
     % OLS for x block
@@ -164,17 +172,14 @@ for block_idx = 1:N_blocks
     title('Statistical residual over iterations');
 end
 
-final_r0_approx_tls = flip(final_r0_approx_tls);
-final_r0_approx_ols = flip(final_r0_approx_ols);
-
 figure
-plot(final_r0_approx_ols); hold on;
-plot(final_r0_approx_tls); hold on;
-plot(use_data_r0_true);
+plot(use_data_soc_meas, final_r0_approx_ols, 'DisplayName', 'OLS'); hold on;
+plot(use_data_soc_meas, final_r0_approx_tls, 'DisplayName', 'TLS'); hold on;
+plot(use_data_soc_true, use_data_r0_true, 'DisplayName', 'TRUE');
 legend show;
 
-final_diff_ols = sqrt(mean(use_data_r0_true(1:N*N_blocks) - final_r0_approx_ols).^2);
-final_diff_tls = sqrt(mean(use_data_r0_true(1:N*N_blocks) - final_r0_approx_tls).^2);
+final_diff_ols = sqrt(mean(use_data_r0_true(1:N_total) - final_r0_approx_ols).^2);
+final_diff_tls = sqrt(mean(use_data_r0_true(1:N_total) - final_r0_approx_tls).^2);
 
 
 fprintf("\n----------------------------------------------------------------------\n")
