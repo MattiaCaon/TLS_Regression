@@ -257,7 +257,15 @@ grid on;
 
 linkaxes([ax1, ax2, ax3], 'x');
 
-% Std deviation calculation (thanks to the know value)
+% Plot True R0
+figure('Position', [100, 100, 1000, 800]);
+plot(data_soc, data_r0_true, Color='blue', LineWidth=2);
+ylabel('R0 [Ohm]');
+xlabel('SOC [%]');
+ylim([0, 0.1]);
+title("R0 non linearity")
+
+% Std deviation calculation (thanks to the know value) and plotting
 diff_soc = use_data_soc_true - use_data_soc_meas;
 diff_squared_soc = diff_soc.^2;
 NOISE_STD_DEV_SOC = sqrt(mean(diff_squared_soc));
