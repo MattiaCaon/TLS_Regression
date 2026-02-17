@@ -74,7 +74,14 @@ for block_idx = 1:N_blocks
     
     % 1. WEIGHTED svd_w EVALUATION (The "Honest" Solver)
     % Whitening
-    Z_w = [x./s_x, y./s_y];
+    N_x = length(x);
+    N_y = length(y);
+    W = [
+        1/s_x, 0;
+        0, 1/s_y;
+    ];
+
+    Z_w = [x, y]*W;
     [U_w, S_w, V_w] = svd(Z_w, 0);
     
     % Slope Calculation (De-whitened)
@@ -141,13 +148,13 @@ for block_idx = 1:N_blocks
     % --- FINAL COMPARISON PRINT ---
     fprintf('\n');
     fprintf('1. STATISTICAL COST \n');
-    fprintf('\t Weighted svd_w:   %.7f\n', cost_stat_w);
-    fprintf('\t Unweighted svd_w: %.7f\n', cost_stat_u);
+    fprintf('\t Weighted svd_w:   %.7f\n', sqrt(cost_stat_w));
+    fprintf('\t Unweighted svd_w: %.7f\n', sqrt(cost_stat_u));
     
     fprintf('%s\n', repmat('-', 1, 46));
     fprintf('2. GEOMETRIC COST\n');
-    fprintf('\t Weighted svd_w:   %.7f\n', cost_geom_w);
-    fprintf('\t Unweighted svd_w: %.7f\n', cost_geom_u);
+    fprintf('\t Weighted svd_w:   %.7f\n', sqrt(cost_geom_w));
+    fprintf('\t Unweighted svd_w: %.7f\n', sqrt(cost_geom_u));
     
 
     %%%%%%%%%%%%%%%%%%%% 6) Data plotting %%%%%%%%%%%%%%%%%%%%
