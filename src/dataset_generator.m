@@ -274,6 +274,18 @@ diff_r0 = use_data_r0_true - use_data_r0_meas;
 diff_squared_r0 = diff_r0.^2;
 NOISE_STD_DEV_R0 = sqrt(mean(diff_squared_r0));
 
+% Calcolo del prodotto incrociato degli errori
+diff_cross_prod = diff_soc .* diff_r0;
+
+% Calcolo della Covarianza
+% Aassume che la media degli errori sia zero (come nel tuo calcolo RMS sopra)
+NOISE_COV = mean(diff_cross_prod)
+
+% Calcola la correlazione (R)
+% Restituisce un numero tra -1 e 1
+R = corrcoef(diff_soc, diff_r0);
+coefficiente_correlazione = R(1,2)
+
 figure('Position', [100, 200, 1000, 800]);
 ax1 = subplot(2, 1, 1);
 plot(diff_soc, 'magenta'); hold on;
